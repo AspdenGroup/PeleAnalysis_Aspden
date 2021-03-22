@@ -1,4 +1,4 @@
-AMREX_HOME ?= ../../../amrex
+AMREX_HOME = ../../amrex
 
 DEBUG	      = FALSE
 DIM	      = 2
@@ -6,17 +6,14 @@ COMP          = gcc
 PRECISION     = DOUBLE
 USE_MPI       = TRUE
 USE_OMP       = FALSE
-#EBASE         = grad
 #EBASE         = combinePlts
 #EBASE         = isosurface
-#EBASE         = stream
-EBASE         = partStream
+#EBASE         = partStream
 #EBASE         = stream2plt
-#EBASE         = sampleStreamlines
 #EBASE         = streamScatter
 #EBASE         = streamSub
 #EBASE         = streamTubeStats
-#EBASE         = curvature
+EBASE         = curvature
 #EBASE         = surfMEFtoDAT
 #EBASE         = surfDATtoMEF
 #EBASE         = buildPMF
@@ -24,6 +21,10 @@ EBASE         = partStream
 #EBASE         = conditionalMean
 #EBASE         = jpdf
 NEEDS_f90_SRC = FALSE
+
+#EBASE         = grad
+#EBASE         = sampleStreamlines
+#EBASE         = stream
 #NEEDS_f90_SRC = TRUE
 
 include $(AMREX_HOME)/Tools/GNUMake/Make.defs
@@ -40,7 +41,7 @@ endif
 INCLUDE_LOCATIONS += .
 VPATH_LOCATIONS   += .
 
-Pdirs   := Base Boundary AmrCore Extern/amrdata Particle
+Pdirs   := Base Boundary AmrCore Extern/amrdata LinearSolvers/MLMG Particle
 Ppack   += $(foreach dir, $(Pdirs), $(AMREX_HOME)/Src/$(dir)/Make.package)
 
 include $(Ppack)
