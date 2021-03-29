@@ -1,10 +1,10 @@
-AMREX_HOME = ../../amrex
 
+AMREX_HOME = ../amrex
 DEBUG	      = FALSE
 DIM	      = 2
 COMP          = gcc
 PRECISION     = DOUBLE
-USE_MPI       = TRUE
+USE_MPI       = FALSE
 USE_OMP       = FALSE
 #EBASE         = combinePlts
 #EBASE         = isosurface
@@ -12,14 +12,17 @@ USE_OMP       = FALSE
 #EBASE         = stream2plt
 #EBASE         = streamScatter
 #EBASE         = streamSub
-#EBASE         = streamTubeStats
-EBASE         = curvature
+EBASE         = streamTubeStats
+#EBASE         = curvature
 #EBASE         = surfMEFtoDAT
+#EBASE         = surfMEFtoDATbasic
 #EBASE         = surfDATtoMEF
 #EBASE         = buildPMF
 #EBASE         = subPlt
 #EBASE         = conditionalMean
 #EBASE         = jpdf
+#EBASE          = plotProg
+#EBASE          = decimate
 NEEDS_f90_SRC = FALSE
 
 #EBASE         = grad

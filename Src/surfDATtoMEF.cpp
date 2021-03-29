@@ -255,8 +255,12 @@ main (int   argc,
         }
         
         int nodesPerElt = -1;
-        if (eltType == "TRIANGLE")
-            nodesPerElt = 3;
+        if (eltType == "TRIANGLE") {
+          nodesPerElt = 3;
+	} else if (eltType == "LINESEG") {
+	  nodesPerElt = 2;
+	}
+	
         
         Vector<Vector<SIZET> > eltVec(E);
         for (SIZET j=0; j<E; ++j)
@@ -276,13 +280,16 @@ main (int   argc,
         Real area = 0;
         map<Vector<int>,Real > bins;
         for (int i=0; i<E; ++i)
-        {
-            const Vector<SIZET>& elt = eltVec[i];
-            const Vector<Real>& A = nodeVec[elt[0]-1];
-            const Vector<Real>& B = nodeVec[elt[1]-1];
-            const Vector<Real>& C = nodeVec[elt[2]-1];
-                        
-            area += triangleArea(A,B,C);
+        {	     
+           const Vector<SIZET>& elt = eltVec[i];
+	   const Vector<Real>& A = nodeVec[elt[0]-1];
+	   const Vector<Real>& B = nodeVec[elt[1]-1];
+	   if (nodesPerElt == 3) {
+	     const Vector<Real>& C = nodeVec[elt[2]-1];               
+	     area += triangleArea(A,B,C);
+	   } else if (nodesPerElt == 2) {
+	     area += sqrt((A[0]-B[0])*(A[0]-B[0]) + (A[1]-B[1])*(A[1]-B[1]));
+	   }
         }
 
         std::cout << "zoneID, area = " << zoneID << ", " << area << std::endl;

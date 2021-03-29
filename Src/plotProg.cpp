@@ -10,16 +10,17 @@
 #include <WritePlotFile.H>
 
 #include <AMReX_BLFort.H>
+/*
 #include <mechanism.h>
 #include <chemistry_file.H>
 #include <util.H>
 #include <util_F.H>
 #include <Transport_F.H>
 #include <Fuego_EOS.H>
-
+*/
 using namespace amrex;
 
-using namespace analysis_util;
+//using namespace analysis_util;
 
 static
 void
@@ -87,11 +88,11 @@ main (int   argc,
 
     int idYin = -1;
     int idTin = -1;
-    Vector<std::string> spec_names = GetSpecNames();
+    //Vector<std::string> spec_names = GetSpecNames();
     const Vector<std::string>& plotVarNames = amrData.PlotVarNames();
     const std::string spName= "Y(H2)";
     const std::string TName= "temp";
-    std::cout << spName << std::endl;
+    //std::cout << spName << std::endl;
     for (int i=0; i<plotVarNames.size(); ++i)
     {
       if (plotVarNames[i] == spName) idYin = i;

@@ -724,14 +724,23 @@ main (int   argc,
         for (int j=0; j<gradComps.size(); ++j)
         {
             // Average peak grad
+	  if (nodesPerElt == 3) {
            volInt[oFirstGr+j] = ( grad[j][faceData[offset  ]-1] +
                                   grad[j][faceData[offset+1]-1] +
                                   grad[j][faceData[offset+2]-1] )/Real(nodesPerElt);
+	  } else {
+	    volInt[oFirstGr+j] = ( grad[j][faceData[offset  ]-1] +
+                                  grad[j][faceData[offset+1]-1])/Real(nodesPerElt);
+	  }
+	  
+	    
         }  
 
         for (int j=0; j<peakComps.size(); ++j)
         {
             // Average peak val
+	  if (nodesPerElt == 3) {
+	    
             volInt[oFirstPk+j] = ( peak[j][faceData[offset  ]-1] +
                                    peak[j][faceData[offset+1]-1] +
                                    peak[j][faceData[offset+2]-1] )/Real(nodesPerElt);
@@ -740,6 +749,16 @@ main (int   argc,
                 peakOK[j][faceData[offset  ]-1]  && 
                 peakOK[j][faceData[offset+1]-1]  && 
                 peakOK[j][faceData[offset+2]-1] ); // only ok for elt if all nodes ok
+	  } else {
+	    volInt[oFirstPk+j] = ( peak[j][faceData[offset  ]-1] +
+                                   peak[j][faceData[offset+1]-1])/Real(nodesPerElt);
+            
+            volInt[oFirstPk+peakComps.size()+j] = Real(
+                peakOK[j][faceData[offset  ]-1]  && 
+                peakOK[j][faceData[offset+1]-1]); // only ok for elt if all nodes ok
+	  }
+	  
+	    
         }
         if (idPFCR>=0)
         {
