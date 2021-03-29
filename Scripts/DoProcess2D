@@ -30,7 +30,7 @@ export GROW=`echo "3*${NCELLSPERLF} + 2" | bc -l`
 grad2d.gnu.ex inputs.process infile= ${PLT} #for thermal thickness
 
 
-combinePlts2d.gnu.ex inputs.process infileL=${PLT} infileR= ${PLT}_gt compsL= 27 compsR= 3 outfile=${PLT}_comb_gt
+combinePlts2d.gnu.ex inputs.process infileL=${PLT} infileR= ${PLT}_gt compsL= 25 compsR= 3 outfile=${PLT}_comb_gt
 
 rm -r ${PLT}_gt
 
