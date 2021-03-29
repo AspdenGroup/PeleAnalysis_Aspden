@@ -16,6 +16,10 @@ extern "C" {
                 const int* dlo, const int* dhi,
                 Real* U, const int* Ulo, const int* Uhi,
                 const int* nc);
+  void pushvtog2d(const int* lo,  const int* hi,
+                const int* dlo, const int* dhi,
+                Real* U, const int* Ulo, const int* Uhi,
+                const int* nc);
   void gradient(const int* lo,  const int* hi,
                 const Real* U, const int* Ulo, const int* Uhi,
                 Real* G, const int* Glo, const int* Ghi,
@@ -123,10 +127,17 @@ main (int   argc,
     {
       FArrayBox& fab = (*state[lev])[mfi];
       const Box& box = mfi.validbox();
+#if (BL_SPACEDIM==3)      
       pushvtog(BL_TO_FORTRAN_BOX(box),
                BL_TO_FORTRAN_BOX(dbox),
                BL_TO_FORTRAN_ANYD(fab),
                &myNComp);
+#elif (BL_SPACEDIM==2)      
+      pushvtog2d(BL_TO_FORTRAN_BOX(box),
+               BL_TO_FORTRAN_BOX(dbox),
+               BL_TO_FORTRAN_ANYD(fab),
+               &myNComp);
+#endif
     }
     
     // Fix up fine-fine and periodic
