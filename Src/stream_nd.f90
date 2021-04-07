@@ -162,8 +162,8 @@ contains
     integer :: b(3), i
     real(amrex_real) :: n(3), tmp
 
-    call IsOK(x,plo,phi,ok)
-    if (ok .eqv. .false.) return
+    !call IsOK(x,plo,phi,ok)
+    !if (ok .eqv. .false.) return
 
     b = 0
     n = 0
