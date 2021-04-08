@@ -73,7 +73,8 @@ main (int   argc,
     if (!dataServicesInit.AmrDataOk()) {
       std::cout << "Cannot find initial condition - normalising using current plotfile" << std::endl;
     } else {
-      std::cout << "Normalising using initial condition" << std::endl;
+      if (ParallelDescriptor::IOProcessor())
+	std::cout << "Normalising using initial condition" << std::endl;
       initNormalise=true;
     }
 
@@ -124,14 +125,16 @@ main (int   argc,
     Real Y_H2_u, Y_H2_b, T_u, T_b;
     if(initNormalise) {
       if(initAmrData.MinMax(initAmrData.ProbDomain()[0],"Y(H2)",0,Y_H2_b,Y_H2_u) && initAmrData.MinMax(initAmrData.ProbDomain()[0],"temp",0,T_u,T_b)) {
-	std::cout << "Found min/max" << std::endl;
+	if (ParallelDescriptor::IOProcessor())
+	  std::cout << "Found min/max" << std::endl;
       } else {
 	std::cout << "Could not find min/max" << std::endl;
 	DataServices::Dispatch(DataServices::ExitRequest, NULL);
       }
     } else {
        if(amrData.MinMax(amrData.ProbDomain()[0],"Y(H2)",0,Y_H2_b,Y_H2_u) && amrData.MinMax(amrData.ProbDomain()[0],"temp",0,T_u,T_b)){
-	 std::cout << "Found min/max" << std::endl;
+	 if (ParallelDescriptor::IOProcessor())
+	   std::cout << "Found min/max" << std::endl;
        } else {
 	 std::cout << "Could not find min/max" << std::endl;
 	 DataServices::Dispatch(DataServices::ExitRequest, NULL);
