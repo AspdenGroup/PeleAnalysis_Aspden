@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# Get Pltlist
+rm pltlist;
+'/bin/ls' -1d plt????? >> pltlist;
+
 # Job A 
 jid1=$(sbatch --parsable DoProcess3DPartA)
 
