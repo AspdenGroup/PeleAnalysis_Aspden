@@ -45,3 +45,8 @@ TAGS
 plt*
 chk*
 
+# decimation stuff
+Src/Decimation/qslim-2.1/libgfx/config.status
+Src/Decimation/qslim-2.1/libgfx/gfx-config
+Src/Decimation/qslim-2.1/mixkit/config.status
+Src/Decimation/qslim-2.1/mixkit/mix-config
