@@ -8,18 +8,37 @@ module stream_module
 
 contains
 
+  subroutine pushvtog(lo, hi, dlo, dhi, U, U_lo, U_hi, nc) bind(c,name='pushvtog')
+    implicit none
+    integer, intent(in) :: nc, lo(3),  hi(3), dlo(3), dhi(3)
+    integer, intent(in) :: U_lo(3), U_hi(3)
+    real(amrex_real), intent(inout) :: U(U_lo(1):U_hi(1),U_lo(2):U_hi(2),U_lo(3):U_hi(3),nc)
+
+    integer :: n
+    real(amrex_real) :: xlo(3), dx(3)
+
+    ! Make up something for these that gets what we want
+    dx(1:3)  = 1._amrex_real
+    xlo(1:3) = 0._amrex_real
+
+    do n = 1,nc
+       call hoextraptocc(U(:,:,:,n),U_lo(1),U_lo(2),U_lo(3),U_hi(1),U_hi(2),U_hi(3),lo,hi,dx,xlo)
+    enddo
+      
+  end subroutine pushvtog
+
   subroutine vtrace(T, T_lo, T_hi, nT, loc, loc_lo, loc_hi, nl,&
      &     ids, n_ids, g, g_lo, g_hi, computeVec, strm, strm_lo, strm_hi,&
-     &     ncs, dx, plo, phi, hRK, errFlag) bind(C,name="vtrace")
+     &     ncs, dx, plo, hRK, errFlag) bind(C,name="vtrace")
     implicit none
     integer, intent(in) ::  nT, nl, computeVec, ncs, n_ids
     integer, intent(in) :: T_lo(3),T_hi(3),g_lo(3),g_hi(3),loc_lo(3),loc_hi(3),strm_lo(3),strm_hi(3)
     real(amrex_real), intent(in) :: T(T_lo(1):T_hi(1),T_lo(2):T_hi(2),T_lo(3):T_hi(3),nT)
-    real(amrex_real), intent(inout) :: g(g_lo(1):g_hi(1),g_lo(2):g_hi(2),g_lo(3):g_hi(3),3)
+    real(amrex_real), intent(inout) :: g(g_lo(1):g_hi(1),g_lo(2):g_hi(2),g_lo(3):g_hi(3),dim)
     real(amrex_real), intent(in) :: loc(loc_lo(1):loc_hi(1),loc_lo(2):loc_hi(2),loc_lo(3):loc_hi(3),nl)
     real(amrex_real), intent(inout) :: strm(strm_lo(1):strm_hi(1),strm_lo(2):strm_hi(2),strm_lo(3):strm_hi(3),ncs)
     integer, intent(in) :: ids(0:n_ids-1)
-    real(amrex_real), intent(in) :: dx(3), plo(3), phi(3), hRK
+    real(amrex_real), intent(in) :: dx(dim), plo(dim), hRK
 
     integer :: i,j,k,n,m
     real(amrex_real) :: x(3),xp(3),xm(3)
@@ -55,7 +74,7 @@ contains
        x(1:dim) = loc(j,loc_lo(2),loc_lo(3),1:dim)
        strm(i,0,strm_lo(3),1:dim) = x(1:dim)
        do m=1,nT
-          call ntrpv(x,T(T_lo(1),T_lo(2),T_lo(3),m),T_lo,T_hi,dx,plo,phi,&
+          call ntrpv(x,T(T_lo(1),T_lo(2),T_lo(3),m),T_lo,T_hi,dx,plo,&
                strm(i,0,strm_lo(3),dim+m),1,ok)
           if (ok .eqv. .false.) then
              errFlag = 1
@@ -67,56 +86,45 @@ contains
        xp(1:dim) = x(1:dim)
        xm(1:dim) = x(1:dim)
        do n=-1,strm_lo(2),-1
-          strm(i,n,strm_lo(3),1:dim) = xm(1:dim)
-          call RK4(xm,-hRK,g,g_lo,g_hi,dx,plo,phi,ok)
-          if (ok) then
-             strm(i,n,strm_lo(3),1:dim) = xm(1:dim)
-          else
-             errFlag = 2
+          call RK4(xm,-hRK,g,g_lo,g_hi,dx,plo,ok)
+          if (ok .eqv. .false.) then
+             errFlag = 1
+             return
           endif
+          strm(i,n,strm_lo(3),1:dim) = xm(1:dim)
           do m=1,nT
-             call ntrpv(xm,T(T_lo(1),T_lo(2),T_lo(3),m),T_lo,T_hi,dx,plo,phi,&
+             call ntrpv(xm,T(T_lo(1),T_lo(2),T_lo(3),m),T_lo,T_hi,dx,plo,&
                   strm(i,n,strm_lo(3),dim+m),1,ok)
              if (ok .eqv. .false.) then
-                strm(i,n,strm_lo(3),dim+m) = strm(i,n+1,strm_lo(3),dim+m)
+                errFlag = 1
+                return
              endif
           enddo
        enddo
          
        do n=1,strm_hi(2)
-          strm(i,n,strm_lo(3),1:dim) = xp(1:dim)
-          call RK4(xp,+hRK,g,g_lo,g_hi,dx,plo,phi,ok)
-          if (ok) then
-             strm(i,n,strm_lo(3),1:dim) = xp(1:dim)
-          else
-             errFlag = 4
+          call RK4(xp,+hRK,g,g_lo,g_hi,dx,plo,ok)
+          if (ok .eqv. .false.) then
+             errFlag = 1
+             return
           endif
+          strm(i,n,strm_lo(3),1:dim) = xp(1:dim)
           do m=1,nT
-             call ntrpv(xp,T(T_lo(1),T_lo(2),T_lo(3),m),T_lo,T_hi,dx,plo,phi,&
+             call ntrpv(xp,T(T_lo(1),T_lo(2),T_lo(3),m),T_lo,T_hi,dx,plo,&
                   strm(i,n,strm_lo(3),dim+m),1,ok)
              if (ok .eqv. .false.) then
-                strm(i,n,strm_lo(3),dim+m) = strm(i,n-1,strm_lo(3),dim+m)
+                errFlag = 1
+                return
              endif
           enddo
        enddo
     enddo
   end subroutine vtrace
 
-  subroutine IsOK(x,plo,phi,ok)
-    implicit none
-    real(amrex_real), intent(in) :: x(3),plo(3),phi(3)
-    logical, intent(out) :: ok
-    integer :: i
-    ok = .true.
-    do i=1,dim
-       if (x(i).lt.plo(i) .or. x(i).gt.phi(i)) ok = .false.
-    enddo
-  end subroutine IsOK
-
-  subroutine RK4(x,h,g,g_lo,g_hi,dx,plo,phi,ok)
+  subroutine RK4(x,h,g,g_lo,g_hi,dx,plo,ok)
     implicit none
     real(amrex_real), intent(inout) :: x(3)
-    real(amrex_real), intent(in) :: h,dx(3),plo(3),phi(3)
+    real(amrex_real), intent(in) :: h,dx(3),plo(3)
     integer, intent(in) :: g_lo(3),g_hi(3)
     real(amrex_real), intent(in) :: g(g_lo(1):g_hi(1),g_lo(2):g_hi(2),g_lo(3):g_hi(3),3)
 
@@ -124,25 +132,25 @@ contains
     logical ok
 
     xx(1:dim) = x(1:dim)
-    call ntrpv(xx,g,g_lo,g_hi,dx,plo,phi,vec,dim,ok)
+    call ntrpv(xx,g,g_lo,g_hi,dx,plo,vec,dim,ok)
     if ( ok .eqv. .false. ) return
     call vnrml(vec)
 
     k1(1:dim) = vec(1:dim)*h
     xx(1:dim) = x(1:dim) + k1(1:dim)*.5d0
-    call ntrpv(xx,g,g_lo,g_hi,dx,plo,phi,vec,dim,ok)
+    call ntrpv(xx,g,g_lo,g_hi,dx,plo,vec,dim,ok)
     if ( ok .eqv. .false. ) return
     call vnrml(vec)
       
     k2(1:dim) = vec(1:dim)*h
     xx(1:dim) = x(1:dim) + k2(1:dim)*.5d0
-    call ntrpv(xx,g,g_lo,g_hi,dx,plo,phi,vec,dim,ok)
+    call ntrpv(xx,g,g_lo,g_hi,dx,plo,vec,dim,ok)
     if ( ok .eqv. .false. ) return
     call vnrml(vec)
     
     k3(1:dim) = vec(1:dim)*h
     xx(1:dim) = x(1:dim) + k3(1:dim)
-    call ntrpv(xx,g,g_lo,g_hi,dx,plo,phi,vec,dim,ok)
+    call ntrpv(xx,g,g_lo,g_hi,dx,plo,vec,dim,ok)
     if ( ok .eqv. .false. ) return
     call vnrml(vec)
      
@@ -150,23 +158,17 @@ contains
     x(1:dim) = x(1:dim) + (k1(1:dim)+k4(1:dim))/6.d0 + (k2(1:dim)+k3(1:dim))/3.d0
   end subroutine RK4
 
-  subroutine ntrpv(x,g,g_lo,g_hi,dx,plo,phi,u,nc,ok)
+  subroutine ntrpv(x,g,g_lo,g_hi,dx,plo,u,nc,ok)
     implicit none
     integer, intent(in) :: nc
-    real(amrex_real), intent(in) :: x(3), dx(3), plo(3), phi(3)
+    real(amrex_real), intent(in) :: x(dim), dx(dim), plo(dim)
     real(amrex_real), intent(inout) :: u(nc)
-    integer, intent(in) :: g_lo(3), g_hi(3)
+    integer, intent(in) :: g_lo(dim), g_hi(dim)
     real(amrex_real), intent(in) :: g(g_lo(1):g_hi(1),g_lo(2):g_hi(2),g_lo(3):g_hi(3),nc)
     logical, intent(inout) :: ok
 
-    integer :: b(3), i
-    real(amrex_real) :: n(3), tmp
-
-    !call IsOK(x,plo,phi,ok)
-    !if (ok .eqv. .false.) return
-
-    b = 0
-    n = 0
+    integer :: b(dim), i
+    real(amrex_real) :: n(dim), tmp
     do i=1,dim
        tmp = (x(i) - plo(i)) / dx(i) - 0.5d0
        b(i) = FLOOR( tmp )
@@ -176,11 +178,12 @@ contains
 
     ok = .true.
     do i=1,dim
-       if (b(i).lt.g_lo(i) .or. b(i).gt.g_hi(i)-1) ok = .false.
+       if (b(i).lt.g_lo(i) .or. b(i).gt.g_hi(i)) ok = .false.
     enddo
     if (.not. ok) then
-       !print *,'b:',b
-       !print *,'DIMS:',g_lo,g_hi
+       print *,'b:',b
+       print *,'DIMS:',g_lo,g_hi
+       ok = .false.
        return
     endif
 
@@ -207,7 +210,7 @@ contains
 
   subroutine vnrml(vec)
     implicit none
-    real(amrex_real), intent(inout) :: vec(3)
+    real(amrex_real), intent(inout) :: vec(dim)
     real(amrex_real) :: eps, sum
     parameter (eps=1.e-12)
     integer :: i
