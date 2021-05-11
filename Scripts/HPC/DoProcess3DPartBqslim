@@ -1,0 +1,21 @@
+#!/bin/bash
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=b9043078@ncl.ac.uk
+#SBATCH -t 2:00:00
+#SBATCH -J PPB-20-300-40-ml1
+#SBATCH --ntasks=1
+
+### output commands as they run
+set -x
+
+# source plotfile
+for PLT in `cat pltlist`; do
+
+# number of points (faces?) on decimated surface
+export NPTS=100000
+
+export i_H2=90
+
+./qslim3d.gnu.ex -t ${NPTS} ${PLT}_prog_H2_${i_H2}.mef > ${PLT}_prog_H2_${i_H2}_${NPTS}.mef
+
+done

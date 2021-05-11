@@ -1,0 +1,25 @@
+#!/bin/bash
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=b9043078@ncl.ac.uk
+#SBATCH -t 2:00:00
+#SBATCH -J PPD-20-300-40-ml1
+#SBATCH --ntasks=1
+
+set -x
+
+# source plotfile
+for PLT in `cat pltlist`; do
+
+# number of points (faces?) on decimated surface
+export NPTS=100000
+
+export i_H2=90
+
+./streamTubeStats3d.gnu.ex infile= ${PLT}_stream_sample_H2_${i_H2}_${NPTS} \
+			 intComps= 6 peakComp= 6 7 avgComps= 4 5
+
+./surfMEFtoDATbasic3d.gnu.ex infile= ${PLT}_stream_sample_H2_${i_H2}_${NPTS}_volInt.mef
+
+./surfMEFtoDAT3d.gnu.ex infile= ${PLT}_stream_sample_H2_${i_H2}_${NPTS}_volInt.mef
+
+done

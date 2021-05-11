@@ -1,0 +1,47 @@
+#!/bin/bash
+#SBATCH --partition=bigmem
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=b9043078@ncl.ac.uk
+#SBATCH -t 12:00:00
+#SBATCH -J PPC-20-300-40-ml1
+#SBATCH --ntasks=32
+
+### output commands as they run
+set -x
+
+# source plotfile
+for PLT in `cat pltlist`; do
+
+#export NCELLSPERLF=${2?Error}
+export NCELLSPERLF=16
+
+# number of points (faces?) on decimated surface
+export NPTS=100000
+
+# stuff to do with constructing the streamlines with a RK sovler (number of steps and step size)
+
+export JHI=`echo "12*${NCELLSPERLF}" | bc -l`
+export NRK=`echo "2*${JHI} + 1" | bc -l`
+export HRK="0.25"
+export GROW=`echo "3*${NCELLSPERLF} + 2" | bc -l`
+    
+export i_H2=90
+export PROG_H2=`echo "0.01*${i_H2}" | bc -l`
+
+srun stream3d.gnu.MPI.ex inputs.process \
+		progressName= prog_H2 \
+		plotfile=${PLT}_comb_H2 \
+		isoFile=${PLT}_prog_H2_${i_H2}_${NPTS}.mef \
+		streamFile=${PLT}_stream_H2_${i_H2}_${NPTS} \
+		hRK=${HRK} nRKsteps=${NRK}
+
+#
+
+srun sampleStreamlines3d.gnu.MPI.ex inputs.process \
+			   nCompsPerPass=1 nGrow=${GROW} \
+			   plotfile=${PLT}_comb_H2 \
+			   pathFile=${PLT}_stream_H2_${i_H2}_${NPTS} \
+			   streamSampleFile=${PLT}_stream_sample_H2_${i_H2}_${NPTS} \
+			   comps= 1 2 3 4
+    
+done
