@@ -469,15 +469,15 @@ s,@ECHO_N@,-n,;t t
 s,@ECHO_T@,,;t t
 s,@LIBS@,-lm ,;t t
 s,@CC@,gcc,;t t
-s,@CFLAGS@,-g -O2  -I/home/thomas/src/visBits/visBits/Decimation/qslim-2.1/libgfx/include -DHAVE_CONFIG_H,;t t
-s,@LDFLAGS@, -L/home/thomas/src/visBits/visBits/Decimation/qslim-2.1/libgfx/src,;t t
-s,@CPPFLAGS@, -I/home/thomas/src/visBits/visBits/Decimation/qslim-2.1/libgfx/include -DHAVE_CONFIG_H,;t t
+s,@CFLAGS@,-g -O2  -I/home/edward/src/PeleAnalysis_Aspden/Src/Decimation/qslim-2.1/libgfx/include -DHAVE_CONFIG_H,;t t
+s,@LDFLAGS@, -L/home/edward/src/PeleAnalysis_Aspden/Src/Decimation/qslim-2.1/libgfx/src,;t t
+s,@CPPFLAGS@, -I/home/edward/src/PeleAnalysis_Aspden/Src/Decimation/qslim-2.1/libgfx/include -DHAVE_CONFIG_H,;t t
 s,@ac_ct_CC@,gcc,;t t
 s,@EXEEXT@,,;t t
 s,@OBJEXT@,o,;t t
 s,@CPP@,gcc -E,;t t
 s,@CXX@,g++,;t t
-s,@CXXFLAGS@,-g -O2  -I/home/thomas/src/visBits/visBits/Decimation/qslim-2.1/libgfx/include -DHAVE_CONFIG_H,;t t
+s,@CXXFLAGS@,-g -O2  -I/home/edward/src/PeleAnalysis_Aspden/Src/Decimation/qslim-2.1/libgfx/include -DHAVE_CONFIG_H,;t t
 s,@ac_ct_CXX@,g++,;t t
 s,@CXXCPP@,g++ -E,;t t
 s,@RANLIB@,ranlib,;t t

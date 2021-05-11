@@ -1,4 +1,4 @@
-MIX_ROOT = /home/thomas/src/visBits/visBits/Decimation/qslim-2.1/mixkit
+MIX_ROOT = /home/edward/src/PeleAnalysis_Aspden/Src/Decimation/qslim-2.1/mixkit
 LIBMIX = -lmix -lgfx
 
 include $(MIX_ROOT)/../libgfx/gfx-config

@@ -460,7 +460,7 @@ s,@ECHO_C@,,;t t
 s,@ECHO_N@,-n,;t t
 s,@ECHO_T@,,;t t
 s,@LIBS@,,;t t
-s,@MIX_ROOT@,/home/thomas/src/visBits/visBits/Decimation/qslim-2.1/mixkit,;t t
+s,@MIX_ROOT@,/home/edward/src/PeleAnalysis_Aspden/Src/Decimation/qslim-2.1/mixkit,;t t
 s,@LIBOBJS@,,;t t
 s,@LTLIBOBJS@,,;t t
 CEOF

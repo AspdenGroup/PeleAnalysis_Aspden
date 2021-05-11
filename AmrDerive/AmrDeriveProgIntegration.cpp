@@ -82,7 +82,8 @@ main (int   argc,
   Array<DataServices *> dataServicesPtrArray(nPlotFiles);                                         // DataServices array for each plot
   Array<AmrData *>      amrDataPtrArray(nPlotFiles);                                              // DataPtrArray for each plot
   Array<Real>           time(nPlotFiles);
-  Array<Real>           int_volume(nPlotFiles);
+  Array<Real>           int_H2(nPlotFiles);
+  Array<Real>           delta_H2(nPlotFiles);
     
   for(int iPlot = 0; iPlot < nPlotFiles; ++iPlot) {
     if (verbose && ParallelDescriptor::IOProcessor())
@@ -108,11 +109,10 @@ main (int   argc,
   // Variables to load
   // may want to hard wire this bit
   //
-  int nVars(pp.countval("vars"));
+  int nVars(1);
   Array<string> varName(nVars);
-  for(int v = 0; v < nVars; v++) {
-    pp.get("vars", varName[v], v);
-  }
+  pp.get("vars", varName[0],0);
+  
   Array<int> destFillComps(nVars);
   for (int i=0; i<nVars; ++i)
     destFillComps[i] = i;
@@ -198,7 +198,7 @@ main (int   argc,
       int refRatio = 1;
 
       // Hack next two lines to taste - need to do levTurb below too
-      int turbVars(nVars); // let's default to integrating each var coming in
+      int turbVars(1); // let's default to integrating each var coming in
       Real *turb = (Real*)malloc(turbVars*size*sizeof(Real));
 
       if (turb==NULL) {std::cout << "Error: Couldn't allocate turb stats memory" << std::endl; return(0);}
@@ -276,6 +276,7 @@ main (int   argc,
 	  // Divide by the area
 	  Real Lx = amrDataPtrArray[iPlot]->ProbSize()[Amrvis::XDIR];
  	  Real Ly = amrDataPtrArray[iPlot]->ProbSize()[Amrvis::YDIR];
+	  Real Lz = 0;
 #if (BL_SPACEDIM==2)
 	  Real area = Lx;
 	  Real vol = area * Ly;
@@ -294,40 +295,38 @@ main (int   argc,
 	    for (int j=0; j<jsize; j++)
 	      integral += turb[j*turbVars+v];
 	    std::cout << "Integral(" << v << ") = " << integral*vol/(Real)jsize << std::endl;
-	    int_volume[iPlot] = integral*vol/(Real)jsize;
+	    int_H2[iPlot] = integral*vol/(Real)jsize;
 #else
 	    for (int k=0; k<ksize; k++)
 	      integral += turb[k*turbVars+v];
 	    std::cout << "Integral(" << v << ") = " << integral*vol/(Real)ksize << std::endl;
-	    int_volume[iPlot] = integral*vol/(Real)ksize;
-#endif
+	    int_H2[iPlot] = integral*vol/(Real)ksize;
+#endif	    
 	  }
-
-	  
 
 	  Real *z = (Real*)malloc(size*sizeof(Real));
 	  for (int i=0; i<size; i++)
 	      z[i] = dx[2]*(0.5+(Real)i);
 
- 	  //
+	  //
 	  // Write data file
 	  //
 	  if (ParallelDescriptor::IOProcessor())
 	    {
-	      FILE *file = fopen("int.dat","w");
+	      FILE *file = fopen("int_prog.dat","w");
 	      for (int iPlot=0; iPlot<nPlotFiles; iPlot++)
-		fprintf(file,"%e %e\n",time[iPlot],int_volume[iPlot]);
+		{		
+		  fprintf(file,"%e %e %e %e %e\n",time[iPlot],int_H2[iPlot],Lx,Ly,Lz);
+		}
 	      fclose(file);
 	    }
 	  
 	  free(z);
       }
-      
       free(turb);
-
+      
       ParallelDescriptor::Barrier();
   }
-
 
   BoxLib::Finalize();
   return 0;

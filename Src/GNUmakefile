@@ -1,7 +1,7 @@
 
 AMREX_HOME = ../amrex
 DEBUG	      = FALSE
-DIM	      = 3
+DIM	      = 2
 COMP          = gcc
 PRECISION     = DOUBLE
 USE_MPI       = FALSE
@@ -22,9 +22,10 @@ USE_OMP       = FALSE
 #EBASE         = subPlt
 #EBASE         = conditionalMean
 #EBASE         = jpdf
-#EBASE          = plotProg
-EBASE           = plotPhi
-#EBASE          = decimate
+#EBASE         = plotProg
+#EBASE         = plotPhi
+#EBASE         = decimate.
+EBASE          = areaMEF   
 NEEDS_f90_SRC = FALSE
 
 #EBASE         = grad

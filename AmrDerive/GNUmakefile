@@ -21,7 +21,8 @@ BL_NOFAST=TRUE
 #
 #EBASE = AmrDeriveFilter
 #EBASE = AmrDeriveFilter2D
-EBASE = AmrDeriveGenericIntegration
+#EBASE = AmrDeriveGenericIntegration
+EBASE = AmrDeriveProgIntegration
 #EBASE = AmrDerive_udot_grad2u
 #EBASE = AmrDeriveCoarsen
 #EBASE = AmrDerive_udot_F

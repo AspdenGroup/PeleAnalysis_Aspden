@@ -8,9 +8,9 @@ FLTKCONFIG = :
 
 WIN_FLAGS = 
 WIN_LFLAGS = 
-CFLAGS = -g -O2  -I/home/thomas/src/visBits/visBits/Decimation/qslim-2.1/libgfx/include -DHAVE_CONFIG_H $(WIN_FLAGS)
-CXXFLAGS = -g -O2  -I/home/thomas/src/visBits/visBits/Decimation/qslim-2.1/libgfx/include -DHAVE_CONFIG_H $(WIN_FLAGS)
-LDFLAGS =  -L/home/thomas/src/visBits/visBits/Decimation/qslim-2.1/libgfx/src $(WIN_LFLAGS)
+CFLAGS = -g -O2  -I/home/edward/src/PeleAnalysis_Aspden/Src/Decimation/qslim-2.1/libgfx/include -DHAVE_CONFIG_H $(WIN_FLAGS)
+CXXFLAGS = -g -O2  -I/home/edward/src/PeleAnalysis_Aspden/Src/Decimation/qslim-2.1/libgfx/include -DHAVE_CONFIG_H $(WIN_FLAGS)
+LDFLAGS =  -L/home/edward/src/PeleAnalysis_Aspden/Src/Decimation/qslim-2.1/libgfx/src $(WIN_LFLAGS)
 
 WIN_LIBS  =  -lSM -lICE -lX11 -lXext 
 WIN_DLIBS  =  -lSM -lICE -lX11 -lXext 
