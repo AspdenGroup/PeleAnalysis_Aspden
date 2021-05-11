@@ -57,6 +57,7 @@ main (int   argc,
       AmrData::SetVerbose(false);
 
     std::string plotFileName; pp.get("infile",plotFileName);
+    std::string fuelName="H2"; pp.query("fuelName",fuelName);
     DataServices::SetBatchMode();
     Amrvis::FileType fileType(Amrvis::NEWPLT);
 
@@ -91,7 +92,7 @@ main (int   argc,
     int idTin = -1;
     //Vector<std::string> spec_names = GetSpecNames();
     const Vector<std::string>& plotVarNames = amrData.PlotVarNames();
-    const std::string spName= "Y(H2)";
+    const std::string spName= "Y("+fuelName+")";
     const std::string TName= "temp";
     //std::cout << spName << std::endl;
     for (int i=0; i<plotVarNames.size(); ++i)
@@ -115,16 +116,16 @@ main (int   argc,
     destFillComps[idYlocal] = idYlocal;
     
     inNames[idTlocal] = "temp";
-    inNames[idYlocal] =  "Y(H2)";
+    inNames[idYlocal] =  "Y("+fuelName+")";
     outNames[idTlocal] = "prog_temp";
-    outNames[idYlocal] = "prog_H2";
+    outNames[idYlocal] = "prog_"+fuelName;
     
     Vector<std::unique_ptr<MultiFab>> outdata(Nlev);
     const int nGrow = 0;
     int b[3] = {1, 1, 1};
-    Real Y_H2_u, Y_H2_b, T_u, T_b;
+    Real Y_fuel_u, Y_fuel_b, T_u, T_b;
     if(initNormalise) {
-      if(initAmrData.MinMax(initAmrData.ProbDomain()[0],"Y(H2)",0,Y_H2_b,Y_H2_u) && initAmrData.MinMax(initAmrData.ProbDomain()[0],"temp",0,T_u,T_b)) {
+      if(initAmrData.MinMax(initAmrData.ProbDomain()[0],"Y("+fuelName+")",0,Y_fuel_b,Y_fuel_u) && initAmrData.MinMax(initAmrData.ProbDomain()[0],"temp",0,T_u,T_b)) {
 	if (ParallelDescriptor::IOProcessor())
 	  std::cout << "Found min/max" << std::endl;
       } else {
@@ -132,7 +133,7 @@ main (int   argc,
 	DataServices::Dispatch(DataServices::ExitRequest, NULL);
       }
     } else {
-       if(amrData.MinMax(amrData.ProbDomain()[0],"Y(H2)",0,Y_H2_b,Y_H2_u) && amrData.MinMax(amrData.ProbDomain()[0],"temp",0,T_u,T_b)){
+       if(amrData.MinMax(amrData.ProbDomain()[0],"Y("+fuelName+")",0,Y_fuel_b,Y_fuel_u) && amrData.MinMax(amrData.ProbDomain()[0],"temp",0,T_u,T_b)){
 	 if (ParallelDescriptor::IOProcessor())
 	   std::cout << "Found min/max" << std::endl;
        } else {
@@ -157,14 +158,14 @@ main (int   argc,
 	
         const Box& bx = mfi.tilebox();
 	Array4<Real> const& temp  = indata.array(mfi);
-        Array4<Real> const& Y_H2  = indata.array(mfi);
+        Array4<Real> const& Y_fuel  = indata.array(mfi);
         Array4<Real> const& prog_temp = (*outdata[lev]).array(mfi);
-        Array4<Real> const& prog_H2 = (*outdata[lev]).array(mfi);
+        Array4<Real> const& prog_fuel = (*outdata[lev]).array(mfi);
 
         AMREX_PARALLEL_FOR_3D ( bx, i, j, k,
         {
 	  prog_temp(i,j,k,idTlocal) = (temp(i,j,k,idTlocal)-T_u)/(T_b-T_u);
-          prog_H2(i,j,k,idYlocal) = 1-Y_H2(i,j,k,idYlocal)/Y_H2_u;
+          prog_fuel(i,j,k,idYlocal) = 1-Y_fuel(i,j,k,idYlocal)/Y_fuel_u;
         });
       }
 
