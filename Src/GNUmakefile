@@ -1,18 +1,19 @@
 
 AMREX_HOME = ../amrex
 DEBUG	      = FALSE
-DIM	      = 2
+DIM	      = 3
 COMP          = gcc
 PRECISION     = DOUBLE
 USE_MPI       = FALSE
 USE_OMP       = FALSE
+
 #EBASE         = combinePlts
 #EBASE         = isosurface
 #EBASE         = partStream
 #EBASE         = stream2plt
 #EBASE         = streamScatter
 #EBASE         = streamSub
-EBASE         = streamTubeStats
+#EBASE         = streamTubeStats
 #EBASE         = curvature
 #EBASE         = surfMEFtoDAT
 #EBASE         = surfMEFtoDATbasic
@@ -22,12 +23,14 @@ EBASE         = streamTubeStats
 #EBASE         = conditionalMean
 #EBASE         = jpdf
 #EBASE          = plotProg
+EBASE           = plotPhi
 #EBASE          = decimate
 NEEDS_f90_SRC = FALSE
 
 #EBASE         = grad
 #EBASE         = sampleStreamlines
 #EBASE         = stream
+#EBASE          = CORIstream
 #NEEDS_f90_SRC = TRUE
 
 include $(AMREX_HOME)/Tools/GNUMake/Make.defs
