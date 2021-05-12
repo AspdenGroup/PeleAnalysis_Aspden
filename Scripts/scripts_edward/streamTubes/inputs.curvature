@@ -1,0 +1,36 @@
+# I/O 
+verbose        = 1 
+#infile         = pltXXXXX
+appendPlotFile = 0 
+#outfile        = pltXXXXX_K
+finestLevel    = 4
+Aux_Variables  = H2_ConsumptionRate HeatRelease
+
+# Progress variable
+progressName   = prog_H2
+floorIt        = 1
+useFileMinMax  = 1 
+do_smooth      = 1 
+smoothing_time = 1.0e-11
+getProgGrad    = 0
+do_gaussCurv   = 0
+
+# Velocity computations
+do_strain       = 1
+getStrainTensor = 0
+do_velnormal    = 0
+
+# Case options
+is_per   = 1 0  
+sym_dir  = 0 0  
+
+# old options
+geometry.prob_lo     = -1.87E-03 -1.87E-03
+geometry.prob_hi     =  1.87E-03  1.87E-03 
+geometry.is_periodic =  0 0 
+geometry.coord_sys   =  0
+fuelName=H2
+
+# MLMG options
+tol_rel=1.e-12
+rol_abs=1.e-12

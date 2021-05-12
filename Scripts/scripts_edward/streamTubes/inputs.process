@@ -1,0 +1,12 @@
+# general options
+is_per = 0 0 
+
+geometry.prob_lo     = -1.87E-03 -1.87E-03
+geometry.prob_hi     =  1.87E-03  1.87E-03 
+geometry.is_periodic =  0 0 
+geometry.coord_sys   =  0
+fuelName=H2
+
+ 
+ 
+
