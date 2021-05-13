@@ -11,9 +11,9 @@ export hr_loc=23 # H2 newPeleLM
 #export fmf_loc=11 # CH4 newPeleLM
 #export rr_loc=25 # CH4 newPeleLM
 #export hr_loc=26 # CH4 newPeleLM
-#export fmf_loc=9 # C12H26 newPeleLM
-#export rr_loc=22 # C12H26 newPeleLM
-#export hr_loc=23 # C12H26 newPeleLM
+#export fmf_loc=60 # C12H26 newPeleLM
+#export rr_loc=69 # C12H26 newPeleLM
+#export hr_loc=70 # C12H26 newPeleLM
 
 export NCELLSPERLF=16
 export NPTS=100000
