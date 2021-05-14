@@ -1,14 +1,15 @@
 #!/bin/bash
 
 export dim=2;
+export loc=~/src/PeleAnalysis_Aspden/Src;
 
-ln -s ~/src/PeleAnalysis_Aspden/Src/plotProg${dim}d.gnu.MPI.ex .;
-ln -s ~/src/PeleAnalysis_Aspden/Src/grad${dim}d.gnu.MPI.ex .;
-ln -s ~/src/PeleAnalysis_Aspden/Src/combinePlts${dim}d.gnu.MPI.ex .;
-ln -s ~/src/PeleAnalysis_Aspden/Src/curvature${dim}d.gnu.MPI.ex .;
-ln -s ~/src/PeleAnalysis_Aspden/Src/isosurface${dim}d.gnu.MPI.ex .;
-ln -s ~/src/PeleAnalysis_Aspden/Src/stream${dim}d.gnu.MPI.ex .;
-ln -s ~/src/PeleAnalysis_Aspden/Src/sampleStreamlines${dim}d.gnu.MPI.ex .;
-ln -s ~/src/PeleAnalysis_Aspden/Src/streamTubeStats${dim}d.gnu.ex .;
-ln -s ~/src/PeleAnalysis_Aspden/Src/surfMEFtoDAT${dim}d.gnu.MPI.ex .;
-ln -s ~/src/PeleAnalysis_Aspden/Src/surfMEFtoDATbasic${dim}d.gnu.MPI.ex .;
+ln -s ${loc}/plotProg${dim}d.gnu.MPI.ex .;
+ln -s ${loc}/grad${dim}d.gnu.MPI.ex .;
+ln -s ${loc}/combinePlts${dim}d.gnu.MPI.ex .;
+ln -s ${loc}/curvature${dim}d.gnu.MPI.ex .;
+ln -s ${loc}/isosurface${dim}d.gnu.MPI.ex .;
+ln -s ${loc}/stream${dim}d.gnu.MPI.ex .;
+ln -s ${loc}/sampleStreamlines${dim}d.gnu.MPI.ex .;
+ln -s ${loc}/streamTubeStats${dim}d.gnu.ex .;
+ln -s ${loc}/surfMEFtoDAT${dim}d.gnu.MPI.ex .;
+ln -s ${loc}/surfMEFtoDATbasic${dim}d.gnu.MPI.ex .;
