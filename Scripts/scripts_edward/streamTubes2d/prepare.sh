@@ -1,7 +1,7 @@
 #!/bin/bash
 
 export dim=2;
-export loc=~/src/PeleAnalysis_Aspden/Src;
+export loc=~/D1_SSD/AMReX/PeleAnalysis_Aspden/Src;
 
 ln -s ${loc}/plotProg${dim}d.gnu.MPI.ex .;
 ln -s ${loc}/grad${dim}d.gnu.MPI.ex .;
