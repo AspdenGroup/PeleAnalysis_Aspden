@@ -25,7 +25,7 @@ USE_OMP       = FALSE
 #EBASE         = plotProg
 #EBASE         = plotPhi
 #EBASE         = decimate.
-EBASE          = areaMEF   
+EBASE         = areaMEF   
 NEEDS_f90_SRC = FALSE
 
 #EBASE         = grad

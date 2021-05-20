@@ -30,15 +30,14 @@ EBASE = AmrDeriveProgIntegration
 #EBASE = AmrDeriveBinaryDump
 #EBASE = AmrDerive_FlameDensity
 #EBASE = AmrDeriveH2OIntegration
-
 BL_HAS_FORT = TRUE
 
 #EBASE = AmrDeriveSpectrum
 #EBASE  = AmrDeriveMakePPM
 #BL_HAS_FORT = FALSE
-#
-#
-#
+
+
+
 
 DEBUG	  = FALSE
 PROFILE   = FALSE
