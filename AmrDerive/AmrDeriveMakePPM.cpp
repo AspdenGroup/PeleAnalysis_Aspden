@@ -347,7 +347,8 @@ main (int   argc,
 	    if (verbose)
 	      std::cout << "Outputting file..." << std::endl;
 
-	    std::string filename=plotFileNames[iPlot]+"/"+whichVar[iVar]
+	    //std::string filename=plotFileNames[iPlot]+"/"+whichVar[iVar] // origional
+	    std::string filename=plotFileNames[iPlot]+whichVar[iVar] // mod
 #if (BL_SPACEDIM==3)
 	      +sliceStr+"slice"+isliceStr
 #endif
