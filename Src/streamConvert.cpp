@@ -255,11 +255,14 @@ main (int   argc,
 
     std::map<std::string,int> idxOfStrInMem;
 
-    const int nComp(5); // HOW CAN THIS POSSIBLY BE HARDWIRED?
+    int nComp; pp.countval("comps",nComp);
+    Vector<int> comps(nComp); pp.getarr("comps",comps);
+
+    //const int nComp(5); // HOW CAN THIS POSSIBLY BE HARDWIRED?
 
     Vector<int> strComps(nComp);
     for (int i=0; i<nComp; i++)
-      strComps[i]=i+BL_SPACEDIM;
+      strComps[i]=comps[i]+BL_SPACEDIM;
 
     read_ml_streamline_names(infile,strComps,names);
 
