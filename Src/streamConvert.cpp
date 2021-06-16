@@ -255,8 +255,9 @@ main (int   argc,
 
     std::map<std::string,int> idxOfStrInMem;
 
-    int nComp; pp.countval("comps",nComp);
-    Vector<int> comps(nComp); pp.getarr("comps",comps);
+    int nComp = pp.countval("comps");
+    Vector<int> comps(nComp);
+    pp.getarr("comps",comps,0,nComp);
 
     //const int nComp(5); // HOW CAN THIS POSSIBLY BE HARDWIRED?
 
