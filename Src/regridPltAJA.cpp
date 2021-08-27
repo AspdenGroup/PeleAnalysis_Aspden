@@ -112,7 +112,13 @@ main (int   argc,
 	  Real saving = ( (Real)newCount ) / ( (Real)fileCount );
 	  std::cout << "Estimated saving = "
 		    << newCount << " / " << fileCount << " = "
-		    << saving << std::endl;
+		    << saving << " (" << saving/(Real)nBoxes << ")" << std::endl;
+	  // suppose we're using 750Gb on 88 bigmem nodes
+	  std::cout << "Supposed we're using 750Gb on 88 bigmem cores, i.e. 8.52Gb/core." << std::endl;
+	  // total memory would now be 750Gb*saving
+	  int memTot = 750*saving;
+	  std::cout << "We're now going to need " << memTot << "Gb on " << nBoxes
+		    << " cores, i.e. " << 750.*saving/(Real)nBoxes << " Gb/core." << std::endl;
 	}
       } else {
 	// just use file boxArray for lower levels
