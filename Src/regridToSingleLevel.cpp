@@ -77,7 +77,7 @@ main (int   argc,
     
     pp.query("finestLevel",finestLevel);
     MultiFab* fileData;
-    BoxArray newba;
+    BoxArray* newba;
     DistributionMapping dm;
     
     int level=finestLevel;
@@ -86,9 +86,9 @@ main (int   argc,
     // and divide it into the number of boxes specified
     Box      probDomain = amrData.ProbDomain()[level];//fileba.minimalBox();
     BoxList  newbl(probDomain,nBoxes);
-    
+    newba = new BoxArray(newbl);
     // make space
-    fileData = new MultiFab(newba,dm,nComp,0);
+    fileData = new MultiFab(*newba,dm,nComp,0);
     // load data
     amrData.FillVar(*fileData,level,amrData.PlotVarNames(),comps);
     
