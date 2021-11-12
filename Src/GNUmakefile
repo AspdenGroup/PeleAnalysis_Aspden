@@ -1,7 +1,7 @@
 
 AMREX_HOME = ../amrex
 DEBUG	      = FALSE
-DIM	      = 2
+DIM	      = 3
 COMP          = gcc
 PRECISION     = DOUBLE
 USE_MPI       = FALSE
@@ -25,8 +25,9 @@ USE_OMP       = FALSE
 #EBASE         = plotProg
 #EBASE         = plotPhi
 #EBASE         = decimate.
-EBASE         = areaMEF   
-NEEDS_f90_SRC = FALSE
+#EBASE         = areaMEF
+#EBASE         = streamConvert
+#NEEDS_f90_SRC = FALSE
 
 #EBASE         = grad
 #EBASE         = sampleStreamlines
