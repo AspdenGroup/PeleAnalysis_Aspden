@@ -54,6 +54,7 @@ main (int   argc,
     int useFileMinMax         = 1;
     bool do_strain            = false;
     bool do_gaussCurv         = false;
+    bool do_principalCurv     = false;
     bool getStrainTensor      = false;
     bool do_velnormal         = false;
     bool do_threshold         = false;
@@ -78,6 +79,13 @@ main (int   argc,
     pp.query("finestLevel",finestLevel);
     pp.query("appendPlotFile",appendPlotFile);
     pp.query("do_gaussCurv",do_gaussCurv);
+
+    pp.query("do_gaussCurv",do_gaussCurv);
+    if (do_principalCurv == true)
+    {
+	Print() << "needs gaussCurv for principleCurv -- overriding gaussCurv" << std::endl;
+	do_gaussCurv = true;
+    }
 
     // Progress variable
     pp.query("progressName",progressName);
@@ -208,20 +216,26 @@ main (int   argc,
 
 #if AMREX_SPACEDIM > 2
     const int idKg = idN + AMREX_SPACEDIM;   // Gaussian curvature
-    if (do_strain) {
-      idSR = idKg + 1;
-      nCompOut = idSR + 1;
+    const int idpc1 = idKg + 1;
+    const int idpc2 = idpc1 + 1;
+    if (do_strain)
+    {
+	idSR = idpc2 + 1;
+	nCompOut = idSR + 1;
     }
-    else {
-      nCompOut = idKg + 1;
+    else
+    {
+	nCompOut = idpc2 + 1;
     }
 #else
-    if (do_strain) {
-      idSR = idN + AMREX_SPACEDIM;
-      nCompOut = idSR + 1;
+    if (do_strain)
+    {
+	idSR = idN + AMREX_SPACEDIM;
+	nCompOut = idpc2 + 1;
     }
-    else {
-      nCompOut = idN + AMREX_SPACEDIM;
+    else
+    {
+	nCompOut = idN + AMREX_SPACEDIM;
     }
 #endif
 
@@ -249,6 +263,8 @@ main (int   argc,
        Print() << "   idKm:     " << idKm << '\n';
 #if AMREX_SPACEDIM > 2
        Print() << "   idKg:     " << idKg << '\n';
+       Print() << "   idpc1:    " << idpc1 << '\n';
+       Print() << "   idpc2:    " << idpc2 << '\n';
 #endif
        if (do_strain) {
           Print() << "   idSR:     " << idSR << '\n';
@@ -674,8 +690,40 @@ main (int   argc,
                });
            }
            MultiFab::Copy(*state[lev], gCurv, 0, idKg, 1, 0);
+
+	   if (do_principalCurv == true)
+	   {
+	       // Now get the principle curvatures
+	       MultiFab p1Curv(ba, dmap[lev], 1, 0);     
+	       MultiFab p2Curv(ba, dmap[lev], 1, 0);     
+	       for (MFIter mfi(p1Curv); mfi.isValid(); ++mfi)
+	       {
+		   const Box& bx = mfi.validbox();
+		   const auto& gCurvFab   = gCurv.array(mfi);
+		   const auto& CurvFab    = Curv.array(mfi);
+		   const auto& p1CurvFab  = p1Curv.array(mfi);
+		   const auto& p2CurvFab  = p2Curv.array(mfi);
+		   const auto& progvar    = ProgVar.array(mfi);
+		   amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept
+				      {
+					  if(do_threshold && (progvar(i,j,k) < threshold || progvar(i,j,k) > 1.0-threshold))
+					  {
+					      p1CurvFab(i,j,k) = 0.0;
+					      p2CurvFab(i,j,k) = 0.0;
+					  }
+					  else
+					  {
+					      p1CurvFab(i,j,k) = CurvFab(i,j,k) + sqrt(abs(pow(CurvFab(i,j,k),2) - gCurvFab(i,j,k)));
+					      p2CurvFab(i,j,k) = CurvFab(i,j,k) - sqrt(abs(pow(CurvFab(i,j,k),2) - gCurvFab(i,j,k)));
+					  }
+				      });
+	       }
+	   MultiFab::Copy(*state[lev], p1Curv, 0, idpc1, 1, 0);
+	   MultiFab::Copy(*state[lev], p2Curv, 0, idpc2, 1, 0);
+	   }
         }
         if (verbose) Print() << "Gaussian curvature has been computed on level " << lev << "\n";
+	if (verbose && do_principalCurv == true) Print() << "principle curvatures has been computed on level " << lev << "\n";
 #endif
 
         if (do_strain) { 
@@ -811,6 +859,8 @@ main (int   argc,
 #if AMREX_SPACEDIM == 3
     nnames[idN+2]    = "FlameNormalZ_" + progressName;
     nnames[idKg]     = "GaussianCurvature_" + progressName;
+    nnames[idpc1]    = "principalCurv1_" + progressName;
+    nnames[idpc2]    = "principalCurv_" + progressName; 
 #endif
     if (do_strain) nnames[idSR] = "StrainRate_" + progressName;
 

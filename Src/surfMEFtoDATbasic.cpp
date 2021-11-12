@@ -37,6 +37,21 @@ main (int   argc,
 
     bool verbose = false; pp.query("verbose",verbose);
 
+    bool cleanFCR = false;
+    pp.query("cleanFCR", cleanFCR);
+
+    Real FCR_cut = 0.95;
+    Real vol_cut = 0.9;
+    if (cleanFCR == true)
+    {
+	pp.query("FCR_cut", FCR_cut);  // FCR_int values below (avg) this may be set to zero
+	pp.query("vol_cut", vol_cut);  // FCR_int values above this may be set to zero
+    }
+	
+
+    std::string fuel = "H2";
+    pp.query("fuel",fuel);
+    
     std::string infile; pp.get("infile",infile);
 
     std::ifstream ifs;
@@ -84,6 +99,50 @@ main (int   argc,
     for (int j=0; j<names.size(); ++j)
         vars += " " + names[j];
 
+    // Cleaning FCR 
+    if (cleanFCR == true)
+    {
+	// Finds location of interesting variables
+	int Kloc = -1;
+	int k1loc = -1;
+	int k2loc = -1;
+	int FCRloc = -1;
+	int FCRloc_int = -1;
+	int Vloc = -1;
+	for (int i=0; i<nComp; ++i)
+	{
+	    if (names[i] == fuel+"_ConsumptionRate_avg")
+		FCRloc = i;
+	    else if (names[i] == fuel+"H2_ConsumptionRate_int")
+		FCRloc_int = i;
+	    else if (names[i] == "volume")
+		Vloc = i;	
+	}
+	if (FCRloc || FCRloc || Vloc == -1)
+	    Abort("cannot find FCR_avg or FCR_int or Volume - this is needed for clean");
+	Print() << "Cleaning FCR" << std::endl;
+	// Average Volume and FCR_int
+	Real avg_FCR = 0;
+	Real avg_V = 0;
+	for (int i=0; i<nPts; ++i)
+	{
+	    int offset = i*nComp;
+	    avg_FCR += nodeData[offset+FCRloc];
+	    avg_V += nodeData[offset+Vloc];
+	}
+	avg_FCR /= nPts;
+	avg_V /= nPts;
+
+	// Sets poor data to zero
+	for (int i=0; i<nPts; ++i)
+	{
+	    int offset = i*nComp;
+	    if (nodeData[offset+FCRloc] < avg_FCR - (avg_FCR * FCR_cut) && nodeData[offset+Vloc] > avg_V + (avg_V * vol_cut))
+		nodeData[offset+FCRloc_int] = 0;
+	}
+    }
+
+    
     // Write ASCII output file
     std::ofstream os(outfile.c_str(),std::ios::out);
     for (int i=0; i<nPts; ++i)
