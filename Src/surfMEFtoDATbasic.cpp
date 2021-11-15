@@ -113,12 +113,12 @@ main (int   argc,
 	{
 	    if (names[i] == fuel+"_ConsumptionRate_avg")
 		FCRloc = i;
-	    else if (names[i] == fuel+"H2_ConsumptionRate_int")
+	    else if (names[i] == fuel+"_ConsumptionRate_int")
 		FCRloc_int = i;
 	    else if (names[i] == "volume")
 		Vloc = i;	
 	}
-	if (FCRloc || FCRloc || Vloc == -1)
+	if ((FCRloc || FCRloc || Vloc) == -1)
 	    Abort("cannot find FCR_avg or FCR_int or Volume - this is needed for clean");
 	Print() << "Cleaning FCR" << std::endl;
 	// Average Volume and FCR_int
