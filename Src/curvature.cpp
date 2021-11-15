@@ -54,7 +54,6 @@ main (int   argc,
     int useFileMinMax         = 1;
     bool do_strain            = false;
     bool do_gaussCurv         = false;
-    bool do_principalCurv     = false;
     bool getStrainTensor      = false;
     bool do_velnormal         = false;
     bool do_threshold         = false;
@@ -79,9 +78,6 @@ main (int   argc,
     pp.query("finestLevel",finestLevel);
     pp.query("appendPlotFile",appendPlotFile);
     pp.query("do_gaussCurv",do_gaussCurv);
-    pp.query("do_principalCurv",do_principalCurv);
-    if (do_principalCurv == true)
-	//Print() << "warning - principal curv probally is incorrect" << std::endl;
 
     // Progress variable
     pp.query("progressName",progressName);
@@ -212,26 +208,20 @@ main (int   argc,
 
 #if AMREX_SPACEDIM > 2
     const int idKg = idN + AMREX_SPACEDIM;   // Gaussian curvature
-    const int idpc1 = idKg + 1;
-    const int idpc2 = idpc1 + 1;
-    if (do_strain)
-    {
-	idSR = idpc2 + 1;
-	nCompOut = idSR + 1;
+    if (do_strain) {
+      idSR = idKg + 1;
+      nCompOut = idSR + 1;
     }
-    else
-    {
-	nCompOut = idpc2 + 1;
+    else {
+      nCompOut = idKg + 1;
     }
 #else
-    if (do_strain)
-    {
-	idSR = idN + AMREX_SPACEDIM;
-	nCompOut = idpc2 + 1;
+    if (do_strain) {
+      idSR = idN + AMREX_SPACEDIM;
+      nCompOut = idSR + 1;
     }
-    else
-    {
-	nCompOut = idN + AMREX_SPACEDIM;
+    else {
+      nCompOut = idN + AMREX_SPACEDIM;
     }
 #endif
 
@@ -259,8 +249,6 @@ main (int   argc,
        Print() << "   idKm:     " << idKm << '\n';
 #if AMREX_SPACEDIM > 2
        Print() << "   idKg:     " << idKg << '\n';
-       Print() << "   idpc1:    " << idpc1 << '\n';
-       Print() << "   idpc2:    " << idpc2 << '\n';
 #endif
        if (do_strain) {
           Print() << "   idSR:     " << idSR << '\n';
@@ -587,140 +575,107 @@ main (int   argc,
 
         // Now work on the gaussian curvature: only if 3D and required
 #if AMREX_SPACEDIM == 3
-        if ( do_gaussCurv == true )
-	{ 
+        if ( do_gaussCurv ) { 
 
-	    // Start by getting the Hessian of the progress variable
-	    MultiFab Hessian(ba, dmap[lev], 9, 0);     
-	    
-	    // Compute grad of grad in each dim and store in Hessian
-	    for (int idim = 0; idim< AMREX_SPACEDIM; idim++){
-		
-		MLPoisson poisson2({*geoms[lev]}, {ba}, {dmap[lev]}, info);
-		poisson2.setMaxOrder(4);
-		poisson2.setDomainBC(lo_bc, hi_bc);
-		if ( lev > 0 ) {
-		    MultiFab* gradIdimCoarse = new MultiFab(cell_normal[lev-1]->boxArray(),
-							    cell_normal[lev-1]->DistributionMap(),
-							    1, 0); 
-		    MultiFab::Copy(*gradIdimCoarse, *cell_normal[lev-1], idim, 0, 1, 0);
-		    poisson2.setCoarseFineBC(gradIdimCoarse,2);
-		}
-		MultiFab* gradIdim = new MultiFab(ba, dmap[lev], 1, 1); 
-		MultiFab::Copy(*gradIdim, *cell_normal[lev], idim, 0, 1, 1);
-		poisson2.setLevelBC(0,gradIdim);
-		
-		MLMG mlmg2(poisson2);
-		
-		std::array<MultiFab,AMREX_SPACEDIM> faceg;
-		AMREX_D_TERM(faceg[0].define(convert(ba,IntVect::TheDimensionVector(0)), dmap[lev], 1, 0); ,
-			     faceg[1].define(convert(ba,IntVect::TheDimensionVector(1)), dmap[lev], 1, 0); ,
-			     faceg[2].define(convert(ba,IntVect::TheDimensionVector(2)), dmap[lev], 1, 0); );
-		mlmg2.getFluxes({amrex::GetArrOfPtrs(faceg)},{gradIdim});
-		
-		// Get cell centered d C / d idim _x_y_z
-		MultiFab cell_avgg(ba, dmap[lev], AMREX_SPACEDIM, 0);
-		average_face_to_cellcenter(cell_avgg, 0, amrex::GetArrOfConstPtrs(faceg));
-		cell_avgg.mult(-1.0,0,AMREX_SPACEDIM);
-		
-		// Copy in Hessian
-		MultiFab::Copy(Hessian,cell_avgg,0,(idim)*3,AMREX_SPACEDIM,0);
-	    } 
-	    
-	    // Get the adjugate of the Hessian
-	    MultiFab AdjHessian(ba, dmap[lev], 9, 0);     
-	    
-	    for (MFIter mfi(Hessian); mfi.isValid(); ++mfi)
-	    {
-		const Box& bx = mfi.validbox();
-		const auto& HxiFab  = Hessian.array(mfi,0);           // Cxx, Cxy, Cxz
-		const auto& HyiFab  = Hessian.array(mfi,3);           // Cyx, Cyy, Cyz
-		const auto& HziFab  = Hessian.array(mfi,6);           // Czx, Czy, Czz
-		const auto& AdjHxiFab  = AdjHessian.array(mfi,0); 
-		const auto& AdjHyiFab  = AdjHessian.array(mfi,3); 
-		const auto& AdjHziFab  = AdjHessian.array(mfi,6); 
-		amrex::ParallelFor(bx,
-				   [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept
-				   {
-				       AdjHxiFab(i,j,k,0) = HyiFab(i,j,k,1) * HziFab(i,j,k,2) - HziFab(i,j,k,1) * HyiFab(i,j,k,2); 
-				       AdjHyiFab(i,j,k,0) = HyiFab(i,j,k,2) * HziFab(i,j,k,0) - HziFab(i,j,k,2) * HyiFab(i,j,k,0);
-				       AdjHziFab(i,j,k,0) = HyiFab(i,j,k,0) * HziFab(i,j,k,1) - HziFab(i,j,k,0) * HyiFab(i,j,k,1);
-				       AdjHxiFab(i,j,k,1) = HxiFab(i,j,k,2) * HziFab(i,j,k,1) - HziFab(i,j,k,2) * HxiFab(i,j,k,1);
-				       AdjHyiFab(i,j,k,1) = HxiFab(i,j,k,0) * HziFab(i,j,k,2) - HziFab(i,j,k,0) * HxiFab(i,j,k,2);
-				       AdjHziFab(i,j,k,1) = HxiFab(i,j,k,1) * HziFab(i,j,k,0) - HziFab(i,j,k,1) * HxiFab(i,j,k,0);
-				       AdjHxiFab(i,j,k,2) = HxiFab(i,j,k,1) * HyiFab(i,j,k,2) - HyiFab(i,j,k,1) * HxiFab(i,j,k,2);
-				       AdjHyiFab(i,j,k,2) = HxiFab(i,j,k,2) * HyiFab(i,j,k,0) - HyiFab(i,j,k,2) * HxiFab(i,j,k,0);
-				       AdjHziFab(i,j,k,2) = HxiFab(i,j,k,0) * HyiFab(i,j,k,1) - HyiFab(i,j,k,0) * HxiFab(i,j,k,1); 
-				   });
-	    }
-	    
-	    // Now get the gausian curvature
-	    MultiFab gCurv(ba, dmap[lev], 1, 0);     
-	    for (MFIter mfi(gCurv); mfi.isValid(); ++mfi)
-	    {
-		const Box& bx = mfi.validbox();
-		const auto& progvar    = ProgVar.array(mfi);
-		const auto& gCurvFab   = gCurv.array(mfi); 
-		const auto& CgradNorm  = cellnorm_gradient.array(mfi); 
-		const auto& CxFab      = cellavg_gradient.array(mfi,0); 
-		const auto& CyFab      = cellavg_gradient.array(mfi,1); 
-		const auto& CzFab      = cellavg_gradient.array(mfi,2); 
-		const auto& AdjHxiFab  = AdjHessian.array(mfi,0); 
-		const auto& AdjHyiFab  = AdjHessian.array(mfi,3); 
-		const auto& AdjHziFab  = AdjHessian.array(mfi,6); 
-		amrex::ParallelFor(bx,
-				   [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept
-				   {
-				       gCurvFab(i,j,k) = ( CxFab(i,j,k) * ( AdjHxiFab(i,j,k,0) * CxFab(i,j,k) +
-									    AdjHxiFab(i,j,k,1) * CyFab(i,j,k) + 
-									    AdjHxiFab(i,j,k,2) * CzFab(i,j,k) ) +
-							   CyFab(i,j,k) * ( AdjHyiFab(i,j,k,0) * CxFab(i,j,k) +
-									    AdjHyiFab(i,j,k,1) * CyFab(i,j,k) +
-									    AdjHyiFab(i,j,k,2) * CzFab(i,j,k) ) +
-							   CzFab(i,j,k) * ( AdjHziFab(i,j,k,0) * CxFab(i,j,k) +
-									    AdjHziFab(i,j,k,1) * CyFab(i,j,k) +
-									    AdjHziFab(i,j,k,2) * CzFab(i,j,k) ) 
-					   ) / std::pow(CgradNorm(i,j,k),4.0);
-				       if ( do_threshold && (progvar(i,j,k) < threshold || progvar(i,j,k) > 1.0-threshold) ) {
-					   gCurvFab(i,j,k) = 0.0;
-				       }
-				   });
-	    }
-	    MultiFab::Copy(*state[lev], gCurv, 0, idKg, 1, 0);
-	    
-	    if (do_principalCurv == true)
-	    {
-		// Now get the principle curvatures
-		MultiFab p1Curv(ba, dmap[lev], 1, 0);     
-		MultiFab p2Curv(ba, dmap[lev], 1, 0);     
-		for (MFIter mfi(p1Curv); mfi.isValid(); ++mfi)
-		{
-		    const Box& bx = mfi.validbox();
-		    const auto& gCurvFab   = gCurv.array(mfi);
-		    const auto& CurvFab    = Curv.array(mfi);
-		    const auto& p1CurvFab  = p1Curv.array(mfi);
-		    const auto& p2CurvFab  = p2Curv.array(mfi);
-		    const auto& progvar    = ProgVar.array(mfi);
-		    amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept
-				       {
-					   if(do_threshold && (progvar(i,j,k) < threshold || progvar(i,j,k) > 1.0-threshold))
-					   {
-					       p1CurvFab(i,j,k) = 0.0;
-					       p2CurvFab(i,j,k) = 0.0;
-					   }
-					   else
-					   {
-					       p1CurvFab(i,j,k) = CurvFab(i,j,k) + sqrt(fabs(pow(CurvFab(i,j,k),2) - gCurvFab(i,j,k)));
-					       p2CurvFab(i,j,k) = CurvFab(i,j,k) - sqrt(fabs(pow(CurvFab(i,j,k),2) - gCurvFab(i,j,k)));
-					   }
-				       });
-		}
-		MultiFab::Copy(*state[lev], p1Curv, 0, idpc1, 1, 0);
-		MultiFab::Copy(*state[lev], p2Curv, 0, idpc2, 1, 0);
-	    }
+           // Start by getting the Hessian of the progress variable
+           MultiFab Hessian(ba, dmap[lev], 9, 0);     
+
+           // Compute grad of grad in each dim and store in Hessian
+           for (int idim = 0; idim< AMREX_SPACEDIM; idim++){
+
+              MLPoisson poisson2({*geoms[lev]}, {ba}, {dmap[lev]}, info);
+              poisson2.setMaxOrder(4);
+              poisson2.setDomainBC(lo_bc, hi_bc);
+              if ( lev > 0 ) {
+                  MultiFab* gradIdimCoarse = new MultiFab(cell_normal[lev-1]->boxArray(),
+                                                          cell_normal[lev-1]->DistributionMap(),
+                                                          1, 0); 
+                  MultiFab::Copy(*gradIdimCoarse, *cell_normal[lev-1], idim, 0, 1, 0);
+                  poisson2.setCoarseFineBC(gradIdimCoarse,2);
+              }
+              MultiFab* gradIdim = new MultiFab(ba, dmap[lev], 1, 1); 
+              MultiFab::Copy(*gradIdim, *cell_normal[lev], idim, 0, 1, 1);
+              poisson2.setLevelBC(0,gradIdim);
+
+              MLMG mlmg2(poisson2);
+
+              std::array<MultiFab,AMREX_SPACEDIM> faceg;
+              AMREX_D_TERM(faceg[0].define(convert(ba,IntVect::TheDimensionVector(0)), dmap[lev], 1, 0); ,
+                           faceg[1].define(convert(ba,IntVect::TheDimensionVector(1)), dmap[lev], 1, 0); ,
+                           faceg[2].define(convert(ba,IntVect::TheDimensionVector(2)), dmap[lev], 1, 0); );
+              mlmg2.getFluxes({amrex::GetArrOfPtrs(faceg)},{gradIdim});
+
+              // Get cell centered d C / d idim _x_y_z
+              MultiFab cell_avgg(ba, dmap[lev], AMREX_SPACEDIM, 0);
+              average_face_to_cellcenter(cell_avgg, 0, amrex::GetArrOfConstPtrs(faceg));
+              cell_avgg.mult(-1.0,0,AMREX_SPACEDIM);
+
+              // Copy in Hessian
+              MultiFab::Copy(Hessian,cell_avgg,0,(idim)*3,AMREX_SPACEDIM,0);
+           } 
+
+           // Get the adjugate of the Hessian
+           MultiFab AdjHessian(ba, dmap[lev], 9, 0);     
+
+           for (MFIter mfi(Hessian); mfi.isValid(); ++mfi)
+           {
+               const Box& bx = mfi.validbox();
+               const auto& HxiFab  = Hessian.array(mfi,0);           // Cxx, Cxy, Cxz
+               const auto& HyiFab  = Hessian.array(mfi,3);           // Cyx, Cyy, Cyz
+               const auto& HziFab  = Hessian.array(mfi,6);           // Czx, Czy, Czz
+               const auto& AdjHxiFab  = AdjHessian.array(mfi,0); 
+               const auto& AdjHyiFab  = AdjHessian.array(mfi,3); 
+               const auto& AdjHziFab  = AdjHessian.array(mfi,6); 
+               amrex::ParallelFor(bx,
+               [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept
+               {
+                   AdjHxiFab(i,j,k,0) = HyiFab(i,j,k,1) * HziFab(i,j,k,2) - HziFab(i,j,k,1) * HyiFab(i,j,k,2); 
+                   AdjHyiFab(i,j,k,0) = HyiFab(i,j,k,2) * HziFab(i,j,k,0) - HziFab(i,j,k,2) * HyiFab(i,j,k,0);
+                   AdjHziFab(i,j,k,0) = HyiFab(i,j,k,0) * HziFab(i,j,k,1) - HziFab(i,j,k,0) * HyiFab(i,j,k,1);
+                   AdjHxiFab(i,j,k,1) = HxiFab(i,j,k,2) * HziFab(i,j,k,1) - HziFab(i,j,k,2) * HxiFab(i,j,k,1);
+                   AdjHyiFab(i,j,k,1) = HxiFab(i,j,k,0) * HziFab(i,j,k,2) - HziFab(i,j,k,0) * HxiFab(i,j,k,2);
+                   AdjHziFab(i,j,k,1) = HxiFab(i,j,k,1) * HziFab(i,j,k,0) - HziFab(i,j,k,1) * HxiFab(i,j,k,0);
+                   AdjHxiFab(i,j,k,2) = HxiFab(i,j,k,1) * HyiFab(i,j,k,2) - HyiFab(i,j,k,1) * HxiFab(i,j,k,2);
+                   AdjHyiFab(i,j,k,2) = HxiFab(i,j,k,2) * HyiFab(i,j,k,0) - HyiFab(i,j,k,2) * HxiFab(i,j,k,0);
+                   AdjHziFab(i,j,k,2) = HxiFab(i,j,k,0) * HyiFab(i,j,k,1) - HyiFab(i,j,k,0) * HxiFab(i,j,k,1); 
+               });
+           }
+
+           // Now get the gausian curvature
+           MultiFab gCurv(ba, dmap[lev], 1, 0);     
+           for (MFIter mfi(gCurv); mfi.isValid(); ++mfi)
+           {
+               const Box& bx = mfi.validbox();
+               const auto& progvar    = ProgVar.array(mfi);
+               const auto& gCurvFab   = gCurv.array(mfi); 
+               const auto& CgradNorm  = cellnorm_gradient.array(mfi); 
+               const auto& CxFab      = cellavg_gradient.array(mfi,0); 
+               const auto& CyFab      = cellavg_gradient.array(mfi,1); 
+               const auto& CzFab      = cellavg_gradient.array(mfi,2); 
+               const auto& AdjHxiFab  = AdjHessian.array(mfi,0); 
+               const auto& AdjHyiFab  = AdjHessian.array(mfi,3); 
+               const auto& AdjHziFab  = AdjHessian.array(mfi,6); 
+               amrex::ParallelFor(bx,
+               [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept
+               {
+                  gCurvFab(i,j,k) = ( CxFab(i,j,k) * ( AdjHxiFab(i,j,k,0) * CxFab(i,j,k) +
+                                                       AdjHxiFab(i,j,k,1) * CyFab(i,j,k) + 
+                                                       AdjHxiFab(i,j,k,2) * CzFab(i,j,k) ) +
+                                      CyFab(i,j,k) * ( AdjHyiFab(i,j,k,0) * CxFab(i,j,k) +
+                                                       AdjHyiFab(i,j,k,1) * CyFab(i,j,k) +
+                                                       AdjHyiFab(i,j,k,2) * CzFab(i,j,k) ) +
+                                      CzFab(i,j,k) * ( AdjHziFab(i,j,k,0) * CxFab(i,j,k) +
+                                                       AdjHziFab(i,j,k,1) * CyFab(i,j,k) +
+                                                       AdjHziFab(i,j,k,2) * CzFab(i,j,k) ) 
+                                    ) / std::pow(CgradNorm(i,j,k),4.0);
+                   if ( do_threshold && (progvar(i,j,k) < threshold || progvar(i,j,k) > 1.0-threshold) ) {
+                      gCurvFab(i,j,k) = 0.0;
+                   }
+               });
+           }
+           MultiFab::Copy(*state[lev], gCurv, 0, idKg, 1, 0);
         }
         if (verbose) Print() << "Gaussian curvature has been computed on level " << lev << "\n";
-	if (verbose && do_principalCurv == true) Print() << "principle curvatures has been computed on level " << lev << "\n";
 #endif
 
         if (do_strain) { 
@@ -856,8 +811,6 @@ main (int   argc,
 #if AMREX_SPACEDIM == 3
     nnames[idN+2]    = "FlameNormalZ_" + progressName;
     nnames[idKg]     = "GaussianCurvature_" + progressName;
-    nnames[idpc1]    = "principalCurv1_" + progressName;
-    nnames[idpc2]    = "principalCurv2_" + progressName; 
 #endif
     if (do_strain) nnames[idSR] = "StrainRate_" + progressName;
 
