@@ -310,6 +310,9 @@ main (int   argc,
 
     std::string infile; pp.get("infile",infile);
 
+    Real lF; pp.get("lF",lF);
+    Real range; pp.get("range",range);
+
     // Build outfile name (may modify below if more than one dataset)
     vector<string> infileTokens = Tokenize(infile,".");
     string outfile = infileTokens[0];
@@ -458,9 +461,7 @@ main (int   argc,
     }
 #endif
     
-    std::cout << "this far 1" << std::endl;
     read_ml_streamline_names(infile,strComps,names);
-    std::cout << "this far 2" << std::endl;
     if (verbose && ParallelDescriptor::IOProcessor())
     {
         std::cerr << "...will read the following components: ";
@@ -767,56 +768,27 @@ main (int   argc,
 	volInt[oFirstKn] = volInt[Mcurvloc] + sqrt(fabs(pow(volInt[Mcurvloc],2) - volInt[Gcurvloc]));
 	volInt[oFirstKn+1] = volInt[Mcurvloc] - sqrt(fabs(pow(volInt[Mcurvloc],2) - volInt[Gcurvloc]));
 
-	// calc mean
-	if (volInt[oFirstKn] > 0)
-	{
-	    K1_p_mean += volInt[oFirstKn];
-	    K1_num_p += 1;
-	}
-	if (volInt[oFirstKn] < 0)
-	{
-	    K1_n_mean += volInt[oFirstKn];
-	    K1_num_n += 1;
-	}
-	if (volInt[oFirstKn+1] > 0)
-	{
-	    K2_p_mean += volInt[oFirstKn+1];
-	    K2_num_p += 1;
-	}
-	if (volInt[oFirstKn+1] < 0)
-	{
-	    K2_n_mean += volInt[oFirstKn+1];
-	    K2_num_n += 1;
-	}
+	// Calculate Zones
+	volInt[oFirstKn+2] = -1000; // Zone
 
-	// calc sd
-	if (volInt[oFirstKn] > 0)
-	{
-	    K1_p.push_back(volInt[oFirstKn]);
-	}
-	if (volInt[oFirstKn] < 0)
-	{
-	    K1_n.push_back(volInt[oFirstKn]);
-	}
-	if (volInt[oFirstKn+1] > 0)
-	{
-	    K2_p.push_back(volInt[oFirstKn+1]);
-	}
-	if (volInt[oFirstKn+1] < 0)
-	{
-	    K2_n.push_back(volInt[oFirstKn+1]);
-	}
+	if (sqrt(pow(volInt[oFirstKn],2) + pow(volInt[oFirstKn+1],2)) * lF < range)
+	    volInt[oFirstKn+2] = 0;
+	else if (volInt[oFirstKn+1] > volInt[oFirstKn] / 2)
+	    volInt[oFirstKn+2] = 1;
+	else if (fabs(volInt[oFirstKn+1] / volInt[oFirstKn]) < 0.5)
+	    volInt[oFirstKn+2] = 2;
+	else if (fabs(volInt[oFirstKn] / volInt[oFirstKn+1]) < 0.5)
+	    volInt[oFirstKn+2] = 3;
+	else if (volInt[oFirstKn] < volInt[oFirstKn+1] / 2)
+	    volInt[oFirstKn+2] = 4;
+	else
+	    volInt[oFirstKn+2] = 5; 
+
+
+
+
 
 	
-	// calc max, min
-	if (K1_min > volInt[oFirstKn])
-	    K1_min = volInt[oFirstKn];
-	if (K1_max < volInt[oFirstKn])
-	    K1_max = volInt[oFirstKn];
-	if (K2_min > volInt[oFirstKn+1])
-	    K2_min = volInt[oFirstKn+1];
-	if (K2_max < volInt[oFirstKn+1])
-	    K2_max = volInt[oFirstKn+1];
 	   
         // Average values from the aux_mef
         for (int j=0; j<auxNames.size(); ++j)
@@ -877,157 +849,6 @@ main (int   argc,
             }
         }
     }
-
-
-
-    Print() << "Calculating Curvature Zones" << std::endl;
-
-    // calculate mean
-    K1_p_mean /= K1_num_p;
-    K2_p_mean /= K2_num_p;
-    K1_n_mean /= K1_num_n;
-    K2_n_mean /= K2_num_n;
-
-    // calculate sd
-    Real K1_p_sd = 0;
-    for (int i=0; i <K1_p.size(); i++)
-    {
-	K1_p_sd += pow(K1_p[i] - K1_p_mean,2);
-    }
-    K1_p_sd = sqrt(K1_p_sd/K1_num_p);
-    Real K2_p_sd = 0;
-    for (int i=0; i <K2_p.size(); i++)
-    {
-	K2_p_sd += pow(K2_p[i] - K2_p_mean,2);
-    }
-    K2_p_sd = sqrt(K2_p_sd/K2_num_p);
-    Real K1_n_sd = 0;
-    for (int i=0; i <K1_n.size(); i++)
-    {
-	K1_n_sd += pow(K1_n[i] - K1_n_mean,2);
-    }
-    K1_n_sd = sqrt(K1_n_sd/K1_num_n);
-    Real K2_n_sd = 0;
-    for (int i=0; i <K2_n.size(); i++)
-    {
-	K2_n_sd += pow(K2_n[i] - K2_n_mean,2);
-    }
-    K2_n_sd = sqrt(K2_n_sd/K2_num_n);
-
-    
-    for (int i=0; i<nElts; ++i)
-    {
-	const int offset = i*nodesPerElt;
-	//
-	// NOTE: This is broken in parallel, since my proc may not
-	// have all of these nodes/streamlines
-	//
-	for (int j=0; j<nodesPerElt; ++j)
-	    n[j] = &(nodeMap[ faceData[offset+j] - 1 ]);
-	
-	Vector<Real>& volInt = integrals[i];
-	volInt.resize(nCompOut,0);
-
-	
-        // get averaged values
-	int j = Mcurvloc-oFirstAvg;
-	int comp = sCompAvg + j;
-	volInt[oFirstAvg+j] = 0;
-	for (int k=0; k<nodesPerElt; ++k)
-	{
-	    volInt[oFirstAvg+j] +=
-		(*streamlines[n[k]->amr_lev])[n[k]->box_idx](IntVect(D_DECL(n[k]->pt_idx,0,0)),comp);
-	}
-	volInt[oFirstAvg+j] /= nodesPerElt;
-	j = Gcurvloc-oFirstAvg;
-	comp = sCompAvg + j;
-	volInt[oFirstAvg+j] = 0;
-	for (int k=0; k<nodesPerElt; ++k)
-	{
-	    volInt[oFirstAvg+j] +=
-		(*streamlines[n[k]->amr_lev])[n[k]->box_idx](IntVect(D_DECL(n[k]->pt_idx,0,0)),comp);
-	}
-	volInt[oFirstAvg+j] /= nodesPerElt;
-	
-	// Recalc Principle Curvatures
-	volInt[oFirstKn] = volInt[Mcurvloc] + sqrt(fabs(pow(volInt[Mcurvloc],2) - volInt[Gcurvloc]));
-	volInt[oFirstKn+1] = volInt[Mcurvloc] - sqrt(fabs(pow(volInt[Mcurvloc],2) - volInt[Gcurvloc]));
-	
-	// Calculate Zones
-	volInt[oFirstKn+2] = -1000; // Zone
-
-	Real K1_minval = K1_min + fabs(K2_n_sd) + fabs(0 * K1_min / 2);
-	Real K2_minval = K2_min + fabs(K2_n_sd) + fabs(K2_min / 2);
-	Real K1_maxval = K1_max - fabs(K1_p_sd) - (K1_max / 2);
-	Real K2_maxval = K2_max - fabs(K2_p_sd) - (K2_max / 2);
-	
-	if (volInt[oFirstKn] < K1_minval)
-	{
-	    if (volInt[oFirstKn+1] > K2_maxval)
-		volInt[oFirstKn+2] = 4;
-	    else if (volInt[oFirstKn+1] > 0)
-		volInt[oFirstKn+2] = 4;
-	    else if (volInt[oFirstKn+1] == 0)
-		volInt[oFirstKn+2] = 4;
-	    else if (volInt[oFirstKn+1] > K2_minval)
-		volInt[oFirstKn+2] = 5;
-	    else if (volInt[oFirstKn+1] < K2_minval)
-		volInt[oFirstKn+2] = 5;
-	}
-	if (volInt[oFirstKn] < 0 && volInt[oFirstKn] > K1_minval)
-	{
-	    if (volInt[oFirstKn+1] > K2_maxval)
-		volInt[oFirstKn+2] = 4;
-	    else if (volInt[oFirstKn+1] > 0)
-		volInt[oFirstKn+2] = 4;
-	    else if (volInt[oFirstKn+1] == 0)
-		volInt[oFirstKn+2] = 4;
-	    else if (volInt[oFirstKn+1] > K2_minval)
-		volInt[oFirstKn+2] = 4;
-	    else if (volInt[oFirstKn+1] < K2_minval)
-		volInt[oFirstKn+2] = 4;
-	}
-	if (volInt[oFirstKn] == 0)
-	{
-	    if (volInt[oFirstKn+1] > K2_maxval)
-		volInt[oFirstKn+2] = 2;
-	    else if (volInt[oFirstKn+1] > 0)
-		volInt[oFirstKn+2] = 3;
-	    else if (volInt[oFirstKn+1] == 0)
-		volInt[oFirstKn+2] = 3;
-	    else if (volInt[oFirstKn+1] > K2_minval)
-		volInt[oFirstKn+2] = 4;
-	    else if (volInt[oFirstKn+1] < K2_minval)
-		volInt[oFirstKn+2] = 4;
-	}
-	if (volInt[oFirstKn] > 0 && volInt[oFirstKn] < K1_maxval)
-	{
-	    if (volInt[oFirstKn+1] > K2_maxval)
-		volInt[oFirstKn+2] = 3;
-	    else if (volInt[oFirstKn+1] > 0)
-		volInt[oFirstKn+2] = 3;
-	    else if (volInt[oFirstKn+1] == 0)
-		volInt[oFirstKn+2] = 3;
-	    else if (volInt[oFirstKn+1] > K2_minval)
-		volInt[oFirstKn+2] = 3;
-	    else if (volInt[oFirstKn+1] < K2_minval)
-		volInt[oFirstKn+2] = 4;
-	}
-	if (volInt[oFirstKn] > K1_maxval)
-	{
-	    if (volInt[oFirstKn+1] > K2_maxval)
-		volInt[oFirstKn+2] = 1;
-	    else if (volInt[oFirstKn+1] > 0 && volInt[oFirstKn+1] < K2_maxval )
-		volInt[oFirstKn+2] = 2;
-	    else if (volInt[oFirstKn+1] == 0)
-		volInt[oFirstKn+2] = 3;
-	    else if (volInt[oFirstKn+1] > K2_minval)
-		volInt[oFirstKn+2] = 2;
-	    else if (volInt[oFirstKn+1] < K2_minval)
-		volInt[oFirstKn+2] = 4;
-	}
-    }
-
 
 
 
