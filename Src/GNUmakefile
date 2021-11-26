@@ -7,6 +7,7 @@ PRECISION     = DOUBLE
 USE_MPI       = FALSE
 USE_OMP       = FALSE
 
+#EBASE         = buildPMF
 #EBASE         = combinePlts
 #EBASE         = isosurface
 #EBASE         = partStream
@@ -14,6 +15,7 @@ USE_OMP       = FALSE
 #EBASE         = streamScatter
 #EBASE         = streamSub
 #EBASE         = streamTubeStats
+EBASE         = streamTubeStats-princZones
 #EBASE         = curvature
 #EBASE         = surfMEFtoDAT
 #EBASE         = surfMEFtoDATbasic
@@ -27,9 +29,10 @@ USE_OMP       = FALSE
 #EBASE         = decimate.
 #EBASE         = areaMEF
 #EBASE         = streamConvert
-#NEEDS_f90_SRC = FALSE
+NEEDS_f90_SRC = FALSE
 
 #EBASE         = grad
+#EBASE         = grad3d
 #EBASE         = sampleStreamlines
 #EBASE         = stream
 #EBASE          = CORIstream

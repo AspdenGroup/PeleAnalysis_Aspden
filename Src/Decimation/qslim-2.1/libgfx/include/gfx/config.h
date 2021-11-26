@@ -44,7 +44,7 @@
 /* #undef HAVE_FLTK_GL */
 
 /* Define if Sam Leffler's libtiff is available */
-/* #undef HAVE_LIBTIFF */
+#define HAVE_LIBTIFF 1
 
 /* Define the libtiff LZW is available */
 /* #undef HAVE_LIBTIFF_LZW */

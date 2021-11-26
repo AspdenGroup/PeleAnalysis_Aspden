@@ -3,18 +3,18 @@
 CC = gcc
 CXX = g++
 RANLIB = ranlib
-RM = /bin/rm
+RM = /usr/bin/rm
 FLTKCONFIG = :
 
 WIN_FLAGS = 
 WIN_LFLAGS = 
-CFLAGS = -g -O2  -I/home/edward/src/PeleAnalysis_Aspden/Src/Decimation/qslim-2.1/libgfx/include -DHAVE_CONFIG_H $(WIN_FLAGS)
-CXXFLAGS = -g -O2  -I/home/edward/src/PeleAnalysis_Aspden/Src/Decimation/qslim-2.1/libgfx/include -DHAVE_CONFIG_H $(WIN_FLAGS)
-LDFLAGS =  -L/home/edward/src/PeleAnalysis_Aspden/Src/Decimation/qslim-2.1/libgfx/src $(WIN_LFLAGS)
+CFLAGS = -g -O2  -I/home/edward/S1_SSD/AMReX-Combustion/PeleAnalysis_Aspden/Src/Decimation/qslim-2.1/libgfx/include -DHAVE_CONFIG_H $(WIN_FLAGS)
+CXXFLAGS = -g -O2  -I/home/edward/S1_SSD/AMReX-Combustion/PeleAnalysis_Aspden/Src/Decimation/qslim-2.1/libgfx/include -DHAVE_CONFIG_H $(WIN_FLAGS)
+LDFLAGS =  -L/home/edward/S1_SSD/AMReX-Combustion/PeleAnalysis_Aspden/Src/Decimation/qslim-2.1/libgfx/src $(WIN_LFLAGS)
 
 WIN_LIBS  =  -lSM -lICE -lX11 -lXext 
 WIN_DLIBS  =  -lSM -lICE -lX11 -lXext 
-IMG_LIBS =  -lz -ljpeg -lpng
+IMG_LIBS =  -lz -ljpeg -ltiff -lpng
 GL_LIBS = -lGL -lGLU
 FLTK_LIBS = -lfltk
 GUI_LIBS = $(FLTK_LIBS) $(IMG_LIBS) $(GL_LIBS) $(WIN_LIBS)
