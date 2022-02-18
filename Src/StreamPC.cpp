@@ -492,7 +492,9 @@ WriteStreamAsTecplot(const std::string& outFile)
 
 void
 StreamParticleContainer::
-WriteStreamAsBinary(const std::string& outFile, Vector<int>& faceData)
+WriteStreamAsBinary(const std::string& outFile,
+		    Vector<int>& faceData,
+		    const int nStreamPairs)
 {
   // Set location to first point on stream to guarantee partner line is local
   SetParticleLocation(0,1);
@@ -534,7 +536,7 @@ WriteStreamAsBinary(const std::string& outFile, Vector<int>& faceData)
 	auto& aos = pti.GetArrayOfStructs();
 	for (int pindex=0; pindex<aos.size(); ++pindex) {
 	  ParticleType& p = aos[pindex];
-	  if (p.id() > 0) {
+	  if ( (p.id()>0) && (p.idata(1)==1) ) {
 	    nStreams++;
 	  }
 	}
@@ -544,9 +546,9 @@ WriteStreamAsBinary(const std::string& outFile, Vector<int>& faceData)
     // write to a binary file
     std::string rootName = outFile + "/str_";
     std::string fileName = Concatenate(rootName,myProc) + ".bin";
-    std::string headName = Concatenate(rootName,myProc) + ".head";
+    //std::string headName = Concatenate(rootName,myProc) + ".head";
     FILE *file=fopen(fileName.c_str(),"w");
-    FILE *head=fopen(headName.c_str(),"w");
+    //FILE *head=fopen(headName.c_str(),"w");
     // total number of streams in file
     fwrite(&(nStreams),sizeof(int),1,file);
 
@@ -558,31 +560,67 @@ WriteStreamAsBinary(const std::string& outFile, Vector<int>& faceData)
       {
         auto& aos = pti.GetArrayOfStructs();
         auto& soa = pti.GetStructOfArrays();
+
+	int aosSize = aos.size();
 	
-        for (int pindex=0; pindex<aos.size(); ++pindex)
-        {
+	// construct the pair mapping for this pti
+	Vector<int> pIdMap(2*nStreamPairs+1);
+	for (int pindex=0; pindex<aosSize; ++pindex) {
 	  ParticleType& p = aos[pindex];
-	  if (p.id()>0) {
-	    // write info about this stream
-	    int pId = p.id();
-	    fwrite(&(pId),sizeof(int),1,file);    // id
-	    int dir = p.idata(1);
-	    fwrite(&(dir),sizeof(int),1,file);    // dir
-	    int pairId = p.idata(2);
-	    fwrite(&(pairId),sizeof(int),1,file); // pair id
+	  int pId = p.id();
+	  int pairId = p.idata(2);
+	  if (pId>0) {
+	    pIdMap[pairId]=pindex;
+	  }
+	}
+	
+        for (int pindex=0; pindex<aosSize; ++pindex)
+	{
+	  ParticleType& p = aos[pindex];	  
+	  int pId         = p.id();
+	  int dir         = p.idata(1);
+	  int pairId      = p.idata(2);
+	  
+	  if ( (pId>0) && (dir==1) ) {
+	    // write info about this stream and its pair
+	    int pindexPair      = pIdMap[pId];
+	    ParticleType& pPair = aos[pindexPair];
+	    int pIdPair         = pPair.id();
+	    int dirPair         = pPair.idata(1);
+	    int pairIdPair      = pPair.idata(2);
 	    
-	    fprintf(head,"%i %i %i\n",pId,dir,pairId);
+	    // sanity check
+	    if ( ( pIdPair != pairId ) || ( pId != pairIdPair ) ) 
+	      Abort("Bad pair mapping");
+		 		      
+	    // back out the original id from the surface (both count from 1)
+	    int pIdInv = (pId+1)/2;
+	    fwrite(&(pIdInv),sizeof(int),1,file); // pair id
+	    
+	    //fprintf(head,"%i %i %i\n",pId,dir,pairId);
 	    
 	    minId=min(minId,pId);
 	    maxId=max(maxId,pId);
-	    
-	    for (int j=0; j<nPtsOnStrm; ++j) {
-	      // by including the spacedim offset, we use locations w/o periodicity adjustments
-	      int offset = j*DEF_FCOMP + AMREX_SPACEDIM;
-	      fwrite(&(soa.GetRealData(offset)[0]),sizeof(Real),DEF_FCOMP,file);
+
+	    // if we write in the order paricle->component->position on surface,
+	    // then end up with a single-component stream together in memory
+	    // by including spacedim in offset, we use locations w/o periodicity adjustments
+
+	    for (int iComp=0; iComp<DEF_FCOMP; iComp++) {
+	      // first write pair (dir=-1) backwards (without double writing surface)
+	      for (int j=nPtsOnStrm-1; j>0; j--) {
+		int offset = j*DEF_PCOMP + iComp + AMREX_SPACEDIM;
+		fwrite(&(soa.GetRealData(offset)[pindexPair]),sizeof(Real),1,file);
+	      }
+	      // now write this particle's (dir=1) data (with surface)
+	      for (int j=0; j<nPtsOnStrm; j++) {
+		int offset = j*DEF_PCOMP + iComp + AMREX_SPACEDIM;
+		fwrite(&(soa.GetRealData(offset)[pindex]),sizeof(Real),1,file);
+	      }
 	    }
 	    
 	    nStreamsCheck++; // sanity check to make sure we wrote number of streams anticipated
+
 	  }
         }
       }
@@ -593,13 +631,13 @@ WriteStreamAsBinary(const std::string& outFile, Vector<int>& faceData)
     //printf("writeBin: minId / maxId = %i / %i\n",minId,maxId);
     
     //std::cout << nStreams << " ?= "  << nStreamsCheck << std::endl;
-    
+
     if (nStreams!=nStreamsCheck)
       std::cout << "(nStreams!=nStreamsCheck) : "
 		<< nStreams << " != "  << nStreamsCheck << std::endl;
     
     fclose(file);
-    fclose(head);
+    //fclose(head);
   }
 
   // Write header file with everything consistent across all processors
@@ -608,10 +646,10 @@ WriteStreamAsBinary(const std::string& outFile, Vector<int>& faceData)
     std::string fileName = outFile + "/Header";
     std::ofstream ofs(fileName.c_str());
     ofs << "Even odder-ball replacement for sampled streams" << std::endl;
-    ofs << nProcs << std::endl;     // translates to number of files to read
-    ofs << nStreams << std::endl;   // total number of streams
-    ofs << nPtsOnStrm << std::endl; // number of points
-    ofs << DEF_FCOMP << std::endl;  // number of variables
+    ofs << nProcs << std::endl;         // translates to number of files to read
+    ofs << nStreams << std::endl;       // total number of streams
+    ofs << 2*nPtsOnStrm-1 << std::endl; // number of points
+    ofs << DEF_FCOMP << std::endl;      // number of variables
     for (int iComp=0; iComp<DEF_FCOMP; ++iComp)
       ofs << outVarNames[iComp] << " ";
     ofs << std::endl;

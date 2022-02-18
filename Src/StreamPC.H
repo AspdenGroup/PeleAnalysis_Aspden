@@ -70,7 +70,9 @@ public:
 
   void WriteStreamAsTecplot(const std::string& outfile);
 
-  void WriteStreamAsBinary(const std::string& outfile, amrex::Vector<int>& faceData);
+  void WriteStreamAsBinary(const std::string& outfile,
+			   amrex::Vector<int>& faceData,
+			   const int nStreamPairs);
 
   void InspectParticles(const int nStreamPairs);
 

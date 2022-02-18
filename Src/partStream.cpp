@@ -248,7 +248,7 @@ main (int   argc,
 
     int Nsteps = 50;
     pp.query("Nsteps",Nsteps);
-    StreamParticleContainer spc(Nsteps,geoms,dms,grids,ratios);
+    StreamParticleContainer spc(Nsteps+1,geoms,dms,grids,ratios);
 
     // Get seed locations
     Print() << "Getting seed locations..." << std::endl;
@@ -269,9 +269,9 @@ main (int   argc,
 
     // Check still ok
     if (!spc.OK())
-      Print() << "Not OK (before)" << std::endl;
+      Print() << "spc not OK (before)" << std::endl;
     else 
-      Print() << "OK (before)" << std::endl;
+      Print() << "spc OK (before)" << std::endl;
 
     // Follow streams, interpolating as we go
     Print() << "Computing streams and interpolating..." << std::endl;
@@ -279,7 +279,7 @@ main (int   argc,
     AMREX_ALWAYS_ASSERT(hRK>0 && hRK<=0.5);
     Real dt = hRK * geoms[finestLevel].CellSize()[0];
 
-    for (int step=0; step<Nsteps-1; ++step) {
+    for (int step=0; step<Nsteps; ++step) {
 
       // find next location
       spc.ComputeNextLocation(step,dt,vectorField);
@@ -289,16 +289,16 @@ main (int   argc,
 #if 0
       // check still ok 
       if (!spc.OK())
-	Print() << "Not OK (during; step = " << step << ")" << std::endl;
+	Print() << "spc not OK (during; step = " << step << ")" << std::endl;
 #endif
     }
     
     // check in again
     spc.InspectParticles(nStreamPairs);
     if (!spc.OK())
-      Print() << "Not OK (after)" << std::endl;
+      Print() << "spc not OK (after)" << std::endl;
     else 
-      Print() << "OK (after)" << std::endl;
+      Print() << "spc OK (after)" << std::endl;
     
     //
     // Write particles
@@ -320,7 +320,7 @@ main (int   argc,
     //
     if (writeStreamBin) {
       Print() << "Writing streamlines as binary " << streamBinfile << std::endl;
-      spc.WriteStreamAsBinary(streamBinfile,faceData);
+      spc.WriteStreamAsBinary(streamBinfile,faceData,nStreamPairs);
     }
     
   }
