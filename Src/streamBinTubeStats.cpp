@@ -109,9 +109,6 @@ main (int   argc,
     }
   }
 
-  // Override for now
-  nInt=0;
-  
   // parse derived quantities (e.g. principal curvature zone)
   int nDer(0);
   Vector<std::string> derComps;
@@ -120,12 +117,16 @@ main (int   argc,
   // for each element (i.e. triangle), we have three coordinates and one set of data
   // data will be written in triplicate, but no need to store all that
   // connectivity follows naturally from construction
-  int nSurfComps(nAvg+nInt+nDer);
+  Vector<Real>         eltVol(nElts);
   Vector<Vector<dim3>> surfLocs(nElts);
-  Vector<Vector<Real>> surfData(nElts);
+  Vector<Vector<Real>> surfAvg(nElts);
+  Vector<Vector<Real>> surfInt(nElts);
+  Vector<Vector<Real>> surfDer(nElts);
   for (int iElt=0; iElt<nElts; iElt++) {
     surfLocs[iElt].resize(AMREX_SPACEDIM);
-    surfData[iElt].resize(nSurfComps);    
+    surfAvg[iElt].resize(nAvg);
+    surfInt[iElt].resize(nInt);
+    surfDer[iElt].resize(nDer);
   }
 
   // the surface is the mid point of the stream
@@ -151,12 +152,11 @@ main (int   argc,
 
   // evaluate volume
   Print() << "Evaluating volumes ..." << std::endl;
-  Vector<Real> eltVol(nElts);
   for (int iElt=0; iElt<nElts; iElt++) {
     int3 iStream; // stream indices that make up this element
     for (int iCorner=0; iCorner<AMREX_SPACEDIM; iCorner++) 
       iStream[iCorner]=sIdx[iElt][iCorner];
-    Real vol=0.;
+    eltVol[iElt]=0.;
     for (int iPt=1; iPt<nPtsOnStream; iPt++) {
       dim3 A, B, C, D, E, F;
       for (int d=0; d<AMREX_SPACEDIM; d++) { // three components of location
@@ -167,9 +167,8 @@ main (int   argc,
 	E[d] = streamData[iStream[1]][nPtsOnStream*d+iPt];
 	F[d] = streamData[iStream[2]][nPtsOnStream*d+iPt];
       }
-      vol += wedge_volume(A,B,C,D,E,F);
+      eltVol[iElt] += wedge_volume(A,B,C,D,E,F);
     }
-    eltVol[iElt]=vol;
   }
 
   // calculate averages
@@ -183,23 +182,59 @@ main (int   argc,
 	int iStream=sIdx[iElt][iCorner];
 	avgVal += streamData[iStream][nPtsOnStream*iComp+surfPt];
       }
-      surfData[iElt][iAvg] = avgVal/3.;
+      surfAvg[iElt][iAvg] = avgVal/3.;
     }
   }
-
+  
   // calculate integrals
   Print() << "Calculating integrals ..." << std::endl;
-
+  for (int iElt=0; iElt<nElts; iElt++) {
+    int3 iStream; // stream indices that make up this element
+    for (int iCorner=0; iCorner<AMREX_SPACEDIM; iCorner++) 
+      iStream[iCorner]=sIdx[iElt][iCorner];
+    // set integral to zero
+    for (int iInt=0; iInt<nInt; iInt++) 
+      surfInt[iElt][iInt] = 0.;
+    // integrate
+    for (int iPt=1; iPt<nPtsOnStream; iPt++) {
+      dim3 A, B, C, D, E, F;
+      for (int d=0; d<AMREX_SPACEDIM; d++) { // three components of location
+	A[d] = streamData[iStream[0]][nPtsOnStream*d+iPt-1];
+	B[d] = streamData[iStream[1]][nPtsOnStream*d+iPt-1];
+	C[d] = streamData[iStream[2]][nPtsOnStream*d+iPt-1];
+	D[d] = streamData[iStream[0]][nPtsOnStream*d+iPt];
+	E[d] = streamData[iStream[1]][nPtsOnStream*d+iPt];
+	F[d] = streamData[iStream[2]][nPtsOnStream*d+iPt];
+      }
+      
+      for (int iInt=0; iInt<nInt; iInt++) {
+	int iComp = intIdx[iInt];
+	Real vA = streamData[iStream[0]][nPtsOnStream*iComp+iPt-1];
+	Real vB = streamData[iStream[1]][nPtsOnStream*iComp+iPt-1];
+	Real vC = streamData[iStream[2]][nPtsOnStream*iComp+iPt-1];
+	Real vD = streamData[iStream[0]][nPtsOnStream*iComp+iPt];
+	Real vE = streamData[iStream[1]][nPtsOnStream*iComp+iPt];
+	Real vF = streamData[iStream[2]][nPtsOnStream*iComp+iPt];
+	surfInt[iElt][iInt] += wedge_volume_int(A,vA,B,vB,C,vC,D,vD,E,vE,F,vF);
+      }
+    }
+    for (int iInt=0; iInt<nInt; iInt++) 
+      surfInt[iElt][iInt] /= eltVol[iElt];
+  }
+  
   // calculate derived
   Print() << "Calculating derived quanities ..." << std::endl;
   
   // write surface
   Print() << "Writing surface ..." << std::endl;
-  writeSurfaceTecplot(infile, nAvg, avgComps, nInt, intComps, nDer, derComps,
-		      nElts, eltVol, surfLocs, surfData);
+  writeSurfaceTecplot(infile,
+		      nElts, eltVol,   surfLocs,
+		      nAvg,  avgComps, surfAvg,
+		      nInt,  intComps, surfInt,
+		      nDer,  derComps, surfDer);
   
 }
-
+  
 //
 // routine to read aja's binary stream files
 //
@@ -374,12 +409,10 @@ writeSurfaceFromStreamTecplot(std::string infile,
 
 void
 writeSurfaceTecplot(std::string infile,
-		    int& nAvg, Vector<std::string>& avgComps,
-		    int& nInt, Vector<std::string>& intComps,
-		    int& nDer, Vector<std::string>& derComps,
-		    int& nElts, Vector<Real>& eltVol,
-		    Vector<Vector<dim3>>& surfLocs,
-		    Vector<Vector<Real>>& surfData)
+		    int& nElts, Vector<Real>&        eltVol,   Vector<Vector<dim3>>& surfLocs,
+		    int& nAvg,  Vector<std::string>& avgComps, Vector<Vector<Real>>& surfAvg,
+		    int& nInt,  Vector<std::string>& intComps, Vector<Vector<Real>>& surfInt,
+		    int& nDer,  Vector<std::string>& derComps, Vector<Vector<Real>>& surfDer)
 {
   std::string filename=infile+"_binVolInt.dat";
 
@@ -410,13 +443,13 @@ writeSurfaceTecplot(std::string infile,
       os << eltVol[iElt] << " ";
       // averages
       for (int iAvg=0; iAvg<nAvg; iAvg++)
-	os << surfData[iElt][iAvg] << " ";
+	os << surfAvg[iElt][iAvg] << " ";
       // integrals
       for (int iInt=0; iInt<nInt; iInt++)
-	os << surfData[iElt][iInt] << " ";
+	os << surfInt[iElt][iInt] << " ";
       // derived
       for (int iDer=0; iDer<nDer; iDer++)
-	os << surfData[iElt][iDer] << " ";
+	os << surfDer[iElt][iDer] << " ";
       os << std::endl;
     }
   }
