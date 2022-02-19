@@ -1,0 +1,85 @@
+#!/bin/bash
+
+set -x
+
+export NCELLSPERLF=16
+export JHI=`echo "12*${NCELLSPERLF}" | bc -l`
+export NRK=`echo "2*${JHI} + 1" | bc -l`
+export HRK="0.25"
+export GROW=`echo "3*${NCELLSPERLF} + 2" | bc -l`
+export i_H2=90
+export PROG_H2=`echo "0.01*${i_H2}" | bc -l`
+export NPTS=16000
+
+export NPROC=4
+
+export PLT=plt10000
+
+#
+# gradients
+#
+mpirun -n $NPROC grad3d.gnu.MPI.ex inputs.process infile= ${PLT} | grep -v TOP
+
+mpirun -n $NPROC combinePlts3d.gnu.MPI.ex inputs.process infileL=${PLT} infileR= ${PLT}_gt compsL= 0 1 2 6 13 26 27 compsR= 1 2 3 4 outfile=${PLT}_comb_gt | grep -v TOP
+
+rm -r ${PLT}_gt
+
+#
+# progress variable
+#
+mpirun -n $NPROC plotProg3d.gnu.MPI.ex inputs.process infile= ${PLT} | grep -v TOP
+
+mpirun -n $NPROC combinePlts3d.gnu.MPI.ex inputs.process infileL= ${PLT} infileR= ${PLT}_prog compsL= 0 1 2 26 27 compsR= 0 1 outfile= ${PLT}_prog_strain | grep -v TOP
+
+rm -r ${PLT}_prog
+
+#
+# curvature
+#
+mpirun -n $NPROC curvature3d.gnu.MPI.ex inputs.curvature progressName= prog_H2 infile= ${PLT}_prog_strain outfile= ${PLT}_K_H2 | grep -v TOP
+
+mpirun -n $NPROC combinePlts3d.gnu.MPI.ex inputs.process infileL= ${PLT}_comb_gt infileR= ${PLT}_K_H2 compsL= 0 1 2 3 4 5 6 7 8 9 10 compsR= 0 6 7 8 9 10 11 outfile= ${PLT}_comb_H2 | grep -v TOP
+
+rm -r ${PLT}_comb_gt ${PLT}_K_H2 ${PLT}_prog_strain
+
+#
+# isosurface
+#
+mpirun -n $NPROC isosurface3d.gnu.MPI.ex inputs.process \
+			comps= 11 \
+			isoCompName= prog_H2 isoVal= ${PROG_H2} \
+			infile=${PLT}_comb_H2 outfile= ${PLT}_prog_H2_${i_H2}.mef | grep -v TOP
+
+surfMEFtoDAT3d.gnu.ex infile= plt10000_prog_H2_90.mef
+
+#
+# qslim
+#
+
+./qslim3d.gnu.ex -t ${NPTS} ${PLT}_prog_H2_${i_H2}.mef > ${PLT}_prog_H2_${i_H2}_${NPTS}.mef
+
+surfMEFtoDAT3d.gnu.ex infile= ${PLT}_prog_H2_${i_H2}_${NPTS}.mef
+
+#
+#
+#
+
+mpirun -n $NPROC partStream3d.gnu.MPI.ex infile= ${PLT}_comb_H2 \
+                     isofile= ${PLT}_prog_H2_${i_H2}_${NPTS}.mef \
+                     writeStreams=1 writeParticles=1 is_per= 1 1 0 \
+                     outfile= ${PLT}_prog_H2_${i_H2}_${NPTS}
+
+#
+#
+#
+
+./streamBinTubeStats3d.gnu.ex infile= ${PLT}_prog_H2_${i_H2}_${NPTS}_streamBin \
+ 			      avgComps= Temp H2_ConsumptionRate HeatRelease \
+			                MeanCurvature_prog_H2 GaussianCurvature_prog_H2\
+ 			      intComps= H2_ConsumptionRate HeatRelease \
+			      derComps= flameThickness principalCurvatureZone \
+			      reacTemp= 298. prodTemp= 1440. tempGradVar= ModGradTemp \
+			      pkzLength= 2.e-4 \
+			      pkzMkVar= MeanCurvature_prog_H2 \
+			      pkzGkVar= GaussianCurvature_prog_H2
+
