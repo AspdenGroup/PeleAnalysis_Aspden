@@ -129,10 +129,11 @@ main (int   argc,
     for (int iCorner=0; iCorner<AMREX_SPACEDIM; iCorner++) 
       sIdx[iElt][iCorner] = faceData[iElt*AMREX_SPACEDIM+iCorner];
   
-  // set locations
-  Print() << "Setting locations ..." << std::endl;
   // the surface is the mid point of the stream
   int surfPt = (nPtsOnStream-1)/2; // stream data location counts from zero
+
+  // set locations
+  Print() << "Setting locations ..." << std::endl;
   for (int iElt=0; iElt<nElts; iElt++) {
     // define the spatial location of the three corners of the triangle
     for (int iCorner=0; iCorner<AMREX_SPACEDIM; iCorner++) { // three corners (streams)
@@ -150,16 +151,16 @@ main (int   argc,
     int3 iStream; // stream indices that make up this element
     for (int iCorner=0; iCorner<AMREX_SPACEDIM; iCorner++) 
       iStream[iCorner]=sIdx[iElt][iCorner];
-    eltArea[iElt]=0.;
-    for (int iPt=0; iPt<nPtsOnStream; iPt++) {
-      dim3 A, B, C;
-      for (int d=0; d<AMREX_SPACEDIM; d++) { // three components of location
-	A[d] = streamData[iStream[0]][nPtsOnStream*d+iPt];
-	B[d] = streamData[iStream[1]][nPtsOnStream*d+iPt];
-	C[d] = streamData[iStream[2]][nPtsOnStream*d+iPt];
-      }
-      eltArea[iElt] += wedge_area(A,B,C);
+    // set up triangle ABC
+    dim3 A, B, C;
+    for (int d=0; d<AMREX_SPACEDIM; d++) { // three components of location
+      A[d] = streamData[iStream[0]][nPtsOnStream*d+surfPt];
+      B[d] = streamData[iStream[1]][nPtsOnStream*d+surfPt];
+      C[d] = streamData[iStream[2]][nPtsOnStream*d+surfPt];
     }
+    // find area
+    eltArea[iElt] = wedge_area(A,B,C);
+    // keep a running total
     surfaceArea+=eltArea[iElt];
   }
   Print() << "   ... total surface area = " << surfaceArea << std::endl;
