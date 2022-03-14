@@ -35,6 +35,14 @@ writeSurfaceTecplot(std::string infile,
 		    int& nInt,  Vector<std::string>& intComps, Vector<Vector<Real>>& surfInt,
 		    int& nDer,  Vector<std::string>& derComps, Vector<Vector<Real>>& surfDer);
 
+void
+writeSurfaceBasic(std::string infile,
+		  int& nElts, Vector<Real>&        eltArea,  Vector<Real>&        eltVol,
+		  Vector<Vector<dim3>>& surfLocs,
+		  int& nAvg,  Vector<std::string>& avgComps, Vector<Vector<Real>>& surfAvg,
+		  int& nInt,  Vector<std::string>& intComps, Vector<Vector<Real>>& surfInt,
+		  int& nDer,  Vector<std::string>& derComps, Vector<Vector<Real>>& surfDer);
+
 Real
 wedge_area(const dim3& A,
 	   const dim3& B,
