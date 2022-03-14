@@ -4,19 +4,18 @@ DEBUG	      = FALSE
 DIM	      = 3
 COMP          = gcc
 PRECISION     = DOUBLE
-USE_MPI       = FALSE
+USE_MPI       = TRUE
 USE_OMP       = FALSE
 
-#EBASE         = buildPMF
 #EBASE         = combinePlts
 #EBASE         = isosurface
-#EBASE         = partStream
+EBASE         = partStream
 #EBASE         = stream2plt
 #EBASE         = streamScatter
 #EBASE         = streamSub
 #EBASE         = streamTubeStats
-EBASE         = streamTubeStats-princZones
 #EBASE         = curvature
+#EBASE         = surfMEFtoDATnormS
 #EBASE         = surfMEFtoDAT
 #EBASE         = surfMEFtoDATbasic
 #EBASE         = surfDATtoMEF
@@ -26,17 +25,22 @@ EBASE         = streamTubeStats-princZones
 #EBASE         = jpdf
 #EBASE         = plotProg
 #EBASE         = plotPhi
-#EBASE         = decimate.
-#EBASE         = areaMEF
-#EBASE         = streamConvert
+#EBASE         = decimate
+#EBASE         = areaMEF   
 NEEDS_f90_SRC = FALSE
 
 #EBASE         = grad
-#EBASE         = grad3d
 #EBASE         = sampleStreamlines
 #EBASE         = stream
-#EBASE          = CORIstream
+#EBASE         = CORIstream
 #NEEDS_f90_SRC = TRUE
+
+#EBASE         = streamBinTubeStats
+#NEEDS_f90_SRC = FALSE
+#USE_MPI       = FALSE
+
+#USE_MPI       = FALSE
+#DEBUG         = TRUE
 
 include $(AMREX_HOME)/Tools/GNUMake/Make.defs
 
@@ -44,9 +48,10 @@ CEXE_sources += $(EBASE).cpp
 ifeq ($(NEEDS_f90_SRC),TRUE)
   f90EXE_sources += $(EBASE)_nd.f90
 endif
-CEXE_headers += StreamData.H    StreamPC.H
+
+CEXE_headers += StreamPC.H
 ifeq ($(EBASE),partStream)
-  CEXE_sources += StreamData.cpp  StreamPC.cpp
+  CEXE_sources += StreamPC.cpp
 endif
 
 INCLUDE_LOCATIONS += .

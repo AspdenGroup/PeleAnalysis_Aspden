@@ -149,7 +149,7 @@ main (int   argc,
     pp.query("writeParticles",writeParticles);
     std::string partfile = outfile+"_particles";
     //
-    int writeStreams(1);
+    int writeStreams(0);
     pp.query("writeStreams",writeStreams);
     std::string streamfile = outfile+"_stream";
     pp.query("streamfile",streamfile);
