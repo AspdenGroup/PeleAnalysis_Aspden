@@ -528,118 +528,108 @@ WriteStreamAsBinary(const std::string& outFile,
   // by all ptiters on all levels on this processor
   int nStreams = 0;
   int nStreamsCheck = 0;
-  
-  if (will_write)
-  {
-    for (int lev = 0; lev < Nlev; ++lev) {
-      for (MyParIter pti(*this, lev); pti.isValid(); ++pti) {
-	auto& aos = pti.GetArrayOfStructs();
-	for (int pindex=0; pindex<aos.size(); ++pindex) {
-	  ParticleType& p = aos[pindex];
-	  if ( (p.id()>0) && (p.idata(1)==1) ) {
-	    nStreams++;
-	  }
+    
+  for (int lev = 0; lev < Nlev; ++lev) {
+    for (MyParIter pti(*this, lev); pti.isValid(); ++pti) {
+      auto& aos = pti.GetArrayOfStructs();
+      for (int pindex=0; pindex<aos.size(); ++pindex) {
+	ParticleType& p = aos[pindex];
+	if ( (p.id()>0) && (p.idata(1)==1) ) {
+	  nStreams++;
 	}
       }
     }
-    
-    // write to a binary file
-    std::string rootName = outFile + "/str_";
-    std::string fileName = Concatenate(rootName,myProc) + ".bin";
-    //std::string headName = Concatenate(rootName,myProc) + ".head";
-    FILE *file=fopen(fileName.c_str(),"w");
-    //FILE *head=fopen(headName.c_str(),"w");
-    // total number of streams in file
-    fwrite(&(nStreams),sizeof(int),1,file);
-
-    int minId=100000000;
-    int maxId=-minId;
-    for (int lev = 0; lev < Nlev; ++lev)
-    {
-      for (MyParIter pti(*this, lev); pti.isValid(); ++pti)
-      {
-        auto& aos = pti.GetArrayOfStructs();
-        auto& soa = pti.GetStructOfArrays();
-
-	int aosSize = aos.size();
-	
-	// construct the pair mapping for this pti
-	Vector<int> pIdMap(2*nStreamPairs+1);
-	for (int pindex=0; pindex<aosSize; ++pindex) {
-	  ParticleType& p = aos[pindex];
-	  int pId = p.id();
-	  int pairId = p.idata(2);
-	  if (pId>0) {
-	    pIdMap[pairId]=pindex;
-	  }
-	}
-	
-        for (int pindex=0; pindex<aosSize; ++pindex)
-	{
-	  ParticleType& p = aos[pindex];	  
-	  int pId         = p.id();
-	  int dir         = p.idata(1);
-	  int pairId      = p.idata(2);
-	  
-	  if ( (pId>0) && (dir==1) ) {
-	    // write info about this stream and its pair
-	    int pindexPair      = pIdMap[pId];
-	    ParticleType& pPair = aos[pindexPair];
-	    int pIdPair         = pPair.id();
-	    int dirPair         = pPair.idata(1);
-	    int pairIdPair      = pPair.idata(2);
-	    
-	    // sanity check
-	    if ( ( pIdPair != pairId ) || ( pId != pairIdPair ) ) 
-	      Abort("Bad pair mapping");
-		 		      
-	    // back out the original id from the surface (both count from 1)
-	    int pIdInv = (pId+1)/2;
-	    fwrite(&(pIdInv),sizeof(int),1,file); // pair id
-	    
-	    //fprintf(head,"%i %i %i\n",pId,dir,pairId);
-	    
-	    minId=min(minId,pId);
-	    maxId=max(maxId,pId);
-
-	    // if we write in the order paricle->component->position on surface,
-	    // then end up with a single-component stream together in memory
-	    // by including spacedim in offset, we use locations w/o periodicity adjustments
-
-	    for (int iComp=0; iComp<DEF_FCOMP; iComp++) {
-	      // first write pair (dir=-1) backwards (without double writing surface)
-	      for (int j=nPtsOnStrm-1; j>0; j--) {
-		int offset = j*DEF_PCOMP + iComp + AMREX_SPACEDIM;
-		fwrite(&(soa.GetRealData(offset)[pindexPair]),sizeof(Real),1,file);
-	      }
-	      // now write this particle's (dir=1) data (with surface)
-	      for (int j=0; j<nPtsOnStrm; j++) {
-		int offset = j*DEF_PCOMP + iComp + AMREX_SPACEDIM;
-		fwrite(&(soa.GetRealData(offset)[pindex]),sizeof(Real),1,file);
-	      }
-	    }
-	    
-	    nStreamsCheck++; // sanity check to make sure we wrote number of streams anticipated
-
-	  }
-        }
-      }
-    }
-    ParallelDescriptor::ReduceIntMin(minId);
-    ParallelDescriptor::ReduceIntMax(maxId);
-    //if (ParallelDescriptor::IOProcessor())
-    //printf("writeBin: minId / maxId = %i / %i\n",minId,maxId);
-    
-    //std::cout << nStreams << " ?= "  << nStreamsCheck << std::endl;
-
-    if (nStreams!=nStreamsCheck)
-      std::cout << "(nStreams!=nStreamsCheck) : "
-		<< nStreams << " != "  << nStreamsCheck << std::endl;
-    
-    fclose(file);
-    //fclose(head);
   }
+  
+  // write to a binary file
+  std::string rootName = outFile + "/str_";
+  std::string fileName = Concatenate(rootName,myProc) + ".bin";
+  //std::string headName = Concatenate(rootName,myProc) + ".head";
+  FILE *file=fopen(fileName.c_str(),"w");
+  //FILE *head=fopen(headName.c_str(),"w");
+  // total number of streams in file
+  fwrite(&(nStreams),sizeof(int),1,file);
+  
+  int minId=100000000;
+  int maxId=-minId;
+  for (int lev = 0; lev < Nlev; ++lev) {
 
+    for (MyParIter pti(*this, lev); pti.isValid(); ++pti) {
+      auto& aos = pti.GetArrayOfStructs();
+      auto& soa = pti.GetStructOfArrays();
+      
+      int aosSize = aos.size();
+      
+      // construct the pair mapping for this pti
+      Vector<int> pIdMap(2*nStreamPairs+1);
+      for (int pindex=0; pindex<aosSize; ++pindex) {
+	ParticleType& p = aos[pindex];
+	int pId = p.id();
+	int pairId = p.idata(2);
+	if (pId>0) {
+	  pIdMap[pairId]=pindex;
+	}
+      }
+      
+      for (int pindex=0; pindex<aosSize; ++pindex) {
+	ParticleType& p = aos[pindex];	  
+	int pId         = p.id();
+	int dir         = p.idata(1);
+	int pairId      = p.idata(2);
+	
+	if ( (pId>0) && (dir==1) ) {
+	  // write info about this stream and its pair
+	  int pindexPair      = pIdMap[pId];
+	  ParticleType& pPair = aos[pindexPair];
+	  int pIdPair         = pPair.id();
+	  int dirPair         = pPair.idata(1);
+	  int pairIdPair      = pPair.idata(2);
+	  
+	  // sanity check
+	  if ( ( pIdPair != pairId ) || ( pId != pairIdPair ) ) 
+	    Abort("Bad pair mapping");
+	  
+	  // back out the original id from the surface (both count from 1)
+	  int pIdInv = (pId+1)/2;
+	  fwrite(&(pIdInv),sizeof(int),1,file); // pair id
+	  
+	  //fprintf(head,"%i %i %i\n",pId,dir,pairId);
+	  
+	  minId=min(minId,pId);
+	  maxId=max(maxId,pId);
+	  
+	  // if we write in the order paricle->component->position on surface,
+	  // then end up with a single-component stream together in memory
+	  // by including spacedim in offset, we use locations w/o periodicity adjustments
+	  
+	  for (int iComp=0; iComp<DEF_FCOMP; iComp++) {
+	    // first write pair (dir=-1) backwards (without double writing surface)
+	    for (int j=nPtsOnStrm-1; j>0; j--) {
+	      int offset = j*DEF_PCOMP + iComp + AMREX_SPACEDIM;
+	      fwrite(&(soa.GetRealData(offset)[pindexPair]),sizeof(Real),1,file);
+	    }
+	    // now write this particle's (dir=1) data (with surface)
+	    for (int j=0; j<nPtsOnStrm; j++) {
+	      int offset = j*DEF_PCOMP + iComp + AMREX_SPACEDIM;
+	      fwrite(&(soa.GetRealData(offset)[pindex]),sizeof(Real),1,file);
+	    }
+	  }
+	  
+	  nStreamsCheck++; // sanity check to make sure we wrote number of streams anticipated
+	  
+	}
+      }
+    }
+  }
+  ParallelDescriptor::ReduceIntMin(minId);
+  ParallelDescriptor::ReduceIntMax(maxId);
+  
+  if (nStreams!=nStreamsCheck)
+    std::cout << "(nStreams!=nStreamsCheck) : "
+	      << nStreams << " != "  << nStreamsCheck << std::endl;
+  
+  fclose(file);
+  
   // Write header file with everything consistent across all processors
   ParallelDescriptor::ReduceIntSum(nStreams);
   if (ParallelDescriptor::IOProcessor()) {
@@ -658,7 +648,6 @@ WriteStreamAsBinary(const std::string& outFile,
     ofs << '\n';
     ofs.close();
   }
-
 }
 
 
@@ -667,17 +656,19 @@ StreamParticleContainer::
 InspectParticles (const int nStreamPairs)
 {
   BL_PROFILE("StreamParticleContainer::InspectParticles");
-  return;
+
   SetParticleLocation(0,1);
   
   int IOProc = ParallelDescriptor::IOProcessor();
   int myProc = ParallelDescriptor::MyProc();
   int nProcs = ParallelDescriptor::NProcs();
 
-  int partIndexing[nProcs][2*nStreamPairs+1];
-  int ptiIndexing[nProcs][2*nStreamPairs+1];
+  Vector<int> partIndexing[nProcs];
+  Vector<int> ptiIndexing[nProcs];
 
   for (int iProc = 0; iProc<nProcs; iProc++) {
+    partIndexing[iProc].resize(2*nStreamPairs+1);
+    ptiIndexing[iProc].resize(2*nStreamPairs+1);
     for (int iStream=0; iStream<=2*nStreamPairs; iStream++) {
       partIndexing[iProc][iStream] = -1;
       ptiIndexing[iProc][iStream]  = -1;
@@ -691,11 +682,10 @@ InspectParticles (const int nStreamPairs)
 
   for (int lev = 0; lev < Nlev; ++lev) {
     ptiCounter=0;
+
     for (MyParIter pti(*this, lev); pti.isValid(); ++pti, ++ptiCounter) {
 
       auto& aos = pti.GetArrayOfStructs();
-
-      int NP = aos.size();
 
       for (int pindex=0; pindex<aos.size(); ++pindex) {
         ParticleType& p = aos[pindex];
@@ -716,52 +706,48 @@ InspectParticles (const int nStreamPairs)
 
       } // pindex
     } // pti
-    
-    ParallelDescriptor::Barrier();
+
     // Now let's see if the pair is on the same processor and pti
-    for (int iProc=0; iProc < nProcs; iProc++) {
-      if (iProc==myProc) {
-	ptiCounter=0; // reset
-	for (MyParIter pti(*this, lev); pti.isValid(); ++pti, ++ptiCounter) {
-	  auto& aos = pti.GetArrayOfStructs();
-	  int goodCount=0;
-	  for (int iStream=1; iStream<=2*nStreamPairs; iStream++) {
-	    int pindex1 = partIndexing[myProc][iStream];
-	    int ptiindex1 = ptiIndexing[myProc][iStream];
-	    //if ( (pindex1>-1) && (pindex1<aos.size()) ) {
-	    if ( (pindex1>-1) && (ptiindex1==ptiCounter) ) {
-	      ParticleType& p1 = aos[pindex1];
-	      int myId1   = p1.id();
-	      int pairId1 = p1.idata(2);
-	      int pindex2 = partIndexing[myProc][pairId1];
-	      ParticleType& p2 = aos[pindex2];
-	      int myId2   = p2.id();
-	      int pairId2 = p2.idata(2);
-	      if ( (myId1!=pairId2) || (pairId1!=myId2) ) {
-		std::cout << "myProc / pindex1 / myId1 / pairId1 = " 
-			  << myProc << " / "
-			  << pindex1 << " / "
-			  << myId1 << " / "
-			  << pairId1 << " / " << std::endl;
-		std::cout << "myProc / pindex2 / myId2 / pairId2 = "
-			  << myProc << " / "
-			  << pindex2 << " / "
-			  << myId2 << " / "
-			  << pairId2 << " / " << std::endl;
-	      } else {
-		// looks good
-		goodCount++;
-	      }
-	    }
-	  }
-	  if (goodCount!=aos.size()) {
-	    std::cout << "aos.size() != goodCount : "
-		      << aos.size() << " != " 
-		      << goodCount << std::endl;
+
+    ptiCounter=0; // reset
+    
+    for (MyParIter pti(*this, lev); pti.isValid(); ++pti, ++ptiCounter) {
+      auto& aos = pti.GetArrayOfStructs();
+      int goodCount=0;
+      for (int iStream=1; iStream<=2*nStreamPairs; iStream++) {
+	int pindex1 = partIndexing[myProc][iStream];
+	int ptiindex1 = ptiIndexing[myProc][iStream];
+	//if ( (pindex1>-1) && (pindex1<aos.size()) ) {
+	if ( (pindex1>-1) && (ptiindex1==ptiCounter) ) {
+	  ParticleType& p1 = aos[pindex1];
+	  int myId1   = p1.id();
+	  int pairId1 = p1.idata(2);
+	  int pindex2 = partIndexing[myProc][pairId1];
+	  ParticleType& p2 = aos[pindex2];
+	  int myId2   = p2.id();
+	  int pairId2 = p2.idata(2);
+	  if ( (myId1!=pairId2) || (pairId1!=myId2) ) {
+	    std::cout << "myProc / pindex1 / myId1 / pairId1 = " 
+		      << myProc << " / "
+		      << pindex1 << " / "
+		      << myId1 << " / "
+		      << pairId1 << " / " << std::endl;
+	    std::cout << "myProc / pindex2 / myId2 / pairId2 = "
+		      << myProc << " / "
+		      << pindex2 << " / "
+		      << myId2 << " / "
+		      << pairId2 << " / " << std::endl;
+	  } else {
+	    // looks good
+	    goodCount++;
 	  }
 	}
       }
-      ParallelDescriptor::Barrier();
+      if (goodCount!=aos.size()) {
+	std::cout << "aos.size() != goodCount : "
+		  << aos.size() << " != " 
+		  << goodCount << std::endl;
+      }
     }
     
   } // lev
