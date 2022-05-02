@@ -30,6 +30,8 @@ main (int   argc,
   pp.query("writeStreamsToMatlab",writeStreamsToMatlab);
   int writeTecplotSurfaceFromStream(0);
   pp.query("writeTecplotSurfaceFromStream",writeTecplotSurfaceFromStream);
+  int writeBasic(0);
+  pp.query("writeBasic",writeBasic);
   
   // declare size and data holders
   int nStreams, nElts, nPtsOnStream, nComps;
@@ -358,6 +360,17 @@ main (int   argc,
 		      nDer,  derComps, surfDer);
   Print() << "   ... done" << std::endl;
 
+  // write basic
+  if (writeBasic) {
+    Print() << "Writing basic file ..." << std::endl;
+    writeSurfaceBasic(infile,
+		      nElts, eltArea,  eltVol,  surfLocs,
+		      nAvg,  avgComps, surfAvg,
+		      nInt,  intComps, surfInt,
+		      nDer,  derComps, surfDer);
+    Print() << "   ... done" << std::endl;
+  }
+
   return(0);
 }
   
@@ -601,6 +614,48 @@ writeSurfaceTecplot(std::string infile,
   // write connectivity
   for (int iElt=1; iElt<3*nElts;)
     os << iElt++ << " " << iElt++ << " " << iElt++ << std::endl;
+
+  os.close();
+}
+
+//
+// write all the surface quantities to a tecplot file
+//
+void
+writeSurfaceBasic(std::string infile,
+		  int& nElts, Vector<Real>&        eltArea,  Vector<Real>&        eltVol,
+		  Vector<Vector<dim3>>& surfLocs,
+		  int& nAvg,  Vector<std::string>& avgComps, Vector<Vector<Real>>& surfAvg,
+		  int& nInt,  Vector<std::string>& intComps, Vector<Vector<Real>>& surfInt,
+		  int& nDer,  Vector<std::string>& derComps, Vector<Vector<Real>>& surfDer)
+{
+  std::string filename=infile+"_binVolInt.dat";
+
+  std::ofstream os(filename.c_str(),std::ios::out);
+
+  // write averages
+  os << std::setprecision(12);
+  for (int iElt=0; iElt<nElts; iElt++) {
+    for (int iCorner=0; iCorner<AMREX_SPACEDIM; iCorner++) {
+      // coordinate
+      for (int d=0; d<AMREX_SPACEDIM; d++)
+	os << surfLocs[iElt][iCorner][d] << " ";
+      // area
+      os << eltArea[iElt] << " ";
+      // volume
+      os << eltVol[iElt] << " ";
+      // averages
+      for (int iAvg=0; iAvg<nAvg; iAvg++)
+	os << surfAvg[iElt][iAvg] << " ";
+      // integrals
+      for (int iInt=0; iInt<nInt; iInt++)
+	os << surfInt[iElt][iInt] << " ";
+      // derived
+      for (int iDer=0; iDer<nDer; iDer++)
+	os << surfDer[iElt][iDer] << " ";
+      os << std::endl;
+    }
+  }
 
   os.close();
 }
