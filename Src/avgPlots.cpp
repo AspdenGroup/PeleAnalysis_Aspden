@@ -129,6 +129,7 @@ main (int   argc,
       if(iFile == numFiles-1) {
 	timeFinal = amrData.Time();
       }
+      amrData.FlushGrids();
       //Print() << "... deleting fileData" << std::endl;
       delete fileData;
 	        
@@ -175,6 +176,7 @@ main (int   argc,
        MultiFab::Multiply(*fileData,*fileData,0,0,nComp,0);
        Print() << "... add to stdDevMF" << std::endl;
        MultiFab::Saxpy(stdDevMF,1.0/numFiles,*fileData,0,0,nComp,0);
+       amrData.FlushGrids();
        delete fileData;
      }
      Print() << "Variation calculated, square rooting..." << std::endl;
