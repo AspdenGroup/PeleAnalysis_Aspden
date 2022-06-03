@@ -117,16 +117,20 @@ main (int   argc,
       AmrData& amrData = dataServices.AmrDataRef();
 
       // make space
-      MultiFab fileData(newba,DistributionMapping(newba),nComp,0);
+      MultiFab* fileData;
+      fileData = new MultiFab(newba,DistributionMapping(newba),nComp,0);
+	//MultiFab fileData(newba,DistributionMapping(newba),nComp,0);
       Print() << "... loading " << infiles[iFile] << std::endl;
       // load data
-      amrData.FillVar(fileData,finestLevel,amrData.PlotVarNames(),comps);
+      amrData.FillVar(*fileData,finestLevel,amrData.PlotVarNames(),comps);
       Print() << "... " << infiles[iFile] << " loaded" << std::endl;
       Print() << "... adding to averaged MF" << std::endl;
-      MultiFab::Saxpy(avgMF,1.0/numFiles,fileData,0,0,nComp,0);
+      MultiFab::Saxpy(avgMF,1.0/numFiles,*fileData,0,0,nComp,0);
       if(iFile == numFiles-1) {
 	timeFinal = amrData.Time();
       }
+      //Print() << "... deleting fileData" << std::endl;
+      delete fileData;
 	        
     }
     Print() << "Completed averaging." << std::endl;
@@ -159,17 +163,19 @@ main (int   argc,
        AmrData& amrData = dataServices.AmrDataRef();
        
        // make space
-       MultiFab fileData(newba,DistributionMapping(newba),nComp,0);
+       MultiFab* fileData;
+       fileData = new MultiFab(newba,DistributionMapping(newba),nComp,0);
        Print() << "... loading " << infiles[iFile] << std::endl;
        // load data
-       amrData.FillVar(fileData,finestLevel,amrData.PlotVarNames(),comps);
+       amrData.FillVar(*fileData,finestLevel,amrData.PlotVarNames(),comps);
        Print() << "... " << infiles[iFile] << " loaded" << std::endl;
        Print() << "... subtracting averaged MF" << std::endl;       
-       MultiFab::Subtract(fileData,avgMF,0,0,nComp,0);
+       MultiFab::Subtract(*fileData,avgMF,0,0,nComp,0);
        Print() << "... multiply with self" << std::endl;
-       MultiFab::Multiply(fileData,fileData,0,0,nComp,0);
+       MultiFab::Multiply(*fileData,*fileData,0,0,nComp,0);
        Print() << "... add to stdDevMF" << std::endl;
-       MultiFab::Saxpy(stdDevMF,1.0/numFiles,fileData,0,0,nComp,0);
+       MultiFab::Saxpy(stdDevMF,1.0/numFiles,*fileData,0,0,nComp,0);
+       delete fileData;
      }
      Print() << "Variation calculated, square rooting..." << std::endl;
      //is this the best way to do this?
