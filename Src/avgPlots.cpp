@@ -96,8 +96,9 @@ main (int   argc,
     int coord = 0;
     Geometry geoms(probDomain0,&rb,coord,&(is_per[0]));
     Print() << "... creating avgMF" << std::endl;
-    MultiFab avgMF(newba,DistributionMapping(newba),nComp,0);
-    avgMF.setVal(0);
+    std::unique_ptr<MultiFab> avgMF;
+    avgMF.reset(new MultiFab(newba,DistributionMapping(newba),nComp,0));
+    avgMF->setVal(0);
     Print() << "... avgMF created" << std::endl;
     Real time0 = amrData0.Time();
     Vector<std::string> names(nComp);
@@ -119,8 +120,8 @@ main (int   argc,
       AmrData& amrData = dataServices.AmrDataRef();
 
       // make space
-      MultiFab* fileData;
-      fileData = new MultiFab(newba,DistributionMapping(newba),nComp,0);
+      std::unique_ptr<MultiFab> fileData;
+      fileData.reset(new MultiFab(newba,DistributionMapping(newba),nComp,0));
 	//MultiFab fileData(newba,DistributionMapping(newba),nComp,0);
       Print() << "... loading " << infiles[iFile] << std::endl;
       // load data
@@ -130,17 +131,16 @@ main (int   argc,
       }
       Print() << "... " << infiles[iFile] << " loaded" << std::endl;
       Print() << "... adding to averaged MF" << std::endl;
-      MultiFab::Saxpy(avgMF,1.0/numFiles,*fileData,0,0,nComp,0);
+      MultiFab::Saxpy(*avgMF,1.0/numFiles,*fileData,0,0,nComp,0);
       if(iFile == numFiles-1) {
 	timeFinal = amrData.Time();
       }
       Print() << "... deleting fileData" << std::endl;
-      delete fileData;
-	        
+      fileData.reset();	        
     }
     Print() << "Completed averaging." << std::endl;
     Print() << "Writing " << outfile << "..." << std::endl;
-    WriteSingleLevelPlotfile(outfile,avgMF,names,geoms,timeFinal-time0,levelSteps);
+    WriteSingleLevelPlotfile(outfile,*avgMF,names,geoms,timeFinal-time0,levelSteps);
     int doStdDev = 0;
     pp.query("doStdDev",doStdDev);
     if(doStdDev) {
@@ -149,8 +149,9 @@ main (int   argc,
       pp.query("stdDevOutfile",stdDevOutfile);
       Print() << "stdDevPlotfile setup..." << std::endl;
       Print() << "... creating stdDevMF" << std::endl;
-      MultiFab stdDevMF(newba,DistributionMapping(newba),nComp,0);
-      stdDevMF.setVal(0);
+      std::unique_ptr<MultiFab> stdDevMF;
+      stdDevMF.reset(new MultiFab(newba,DistributionMapping(newba),nComp,0));
+      stdDevMF->setVal(0);
       Print() << "... stdDevMF created" << std::endl;
       Vector<std::string> names_stddev(nComp);
       for (int i=0; i<nComp; ++i)
@@ -168,8 +169,8 @@ main (int   argc,
 	AmrData& amrData = dataServices.AmrDataRef();
 	
        // make space
-	MultiFab* fileData;
-	fileData = new MultiFab(newba,DistributionMapping(newba),nComp,0);
+	std::unique_ptr<MultiFab> fileData;
+	fileData.reset(new MultiFab(newba,DistributionMapping(newba),nComp,0));
 	Print() << "... loading " << infiles[iFile] << std::endl;
 	// load data
 	amrData.FillVar(*fileData,finestLevel,amrData.PlotVarNames(),comps);
@@ -179,19 +180,21 @@ main (int   argc,
 
 	Print() << "... " << infiles[iFile] << " loaded" << std::endl;
 	Print() << "... subtracting averaged MF" << std::endl;       
-	MultiFab::Subtract(*fileData,avgMF,0,0,nComp,0);
+	MultiFab::Subtract(*fileData,*avgMF,0,0,nComp,0);
 	Print() << "... multiply with self" << std::endl;
 	MultiFab::Multiply(*fileData,*fileData,0,0,nComp,0);
 	Print() << "... add to stdDevMF" << std::endl;
-	MultiFab::Saxpy(stdDevMF,1.0/numFiles,*fileData,0,0,nComp,0);
+	MultiFab::Saxpy(*stdDevMF,1.0/numFiles,*fileData,0,0,nComp,0);
 	Print() << "... deleting fileData" << std::endl;
-	delete fileData;
+	fileData.reset();
       }
+
+      avgMF.reset();
       Print() << "Variation calculated, square rooting..." << std::endl;
       //is this the best way to do this?
-      for (MFIter mfi(stdDevMF,TilingIfNotGPU()); mfi.isValid(); ++mfi) {
+      for (MFIter mfi(*stdDevMF,TilingIfNotGPU()); mfi.isValid(); ++mfi) {
 	const Box& bx = mfi.tilebox();
-	Array4<Real> array = stdDevMF.array(mfi);
+	Array4<Real> array = stdDevMF->array(mfi);
 	AMREX_PARALLEL_FOR_4D (bx, nComp, i, j, k, n,
 			       {
 				 array(i,j,k,n) = std::sqrt(array(i,j,k,n));
@@ -199,8 +202,8 @@ main (int   argc,
       }
       Print() << "Finished calculating stardard deviation." << std::endl;
       Print() << "Writing " << stdDevOutfile << "..." << std::endl;
-      WriteSingleLevelPlotfile(stdDevOutfile,stdDevMF,names_stddev,geoms,timeFinal-time0,levelSteps);
-      
+      WriteSingleLevelPlotfile(stdDevOutfile,*stdDevMF,names_stddev,geoms,timeFinal-time0,levelSteps);
+      stdDevMF.reset();
     }
     
     }
