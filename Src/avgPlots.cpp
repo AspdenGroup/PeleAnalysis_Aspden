@@ -131,7 +131,18 @@ main (int   argc,
       }
       Print() << "... " << infiles[iFile] << " loaded" << std::endl;
       Print() << "... adding to averaged MF" << std::endl;
-      MultiFab::Saxpy(*avgMF,1.0/numFiles,*fileData,0,0,nComp,0);
+      //MultiFab::Saxpy(*avgMF,1.0/numFiles,*fileData,0,0,nComp,0);
+      for (MFIter mfi(*avgMF,TilingIfNotGPU()); mfi.isValid(); ++mfi) {
+	const Box& bx = mfi.tilebox();
+	Array4<Real> outarray = avgMF->array(mfi);
+	Array4<Real> inarray = fileData->array(mfi);
+	AMREX_PARALLEL_FOR_4D (bx, nComp, i, j, k, n,
+			       {
+				 outarray(i,j,k,n) += inarray(i,j,k,n)/numFiles;
+			       });
+      }
+      
+      
       if(iFile == numFiles-1) {
 	timeFinal = amrData.Time();
       }
