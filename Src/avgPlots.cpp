@@ -135,8 +135,8 @@ main (int   argc,
       if(iFile == numFiles-1) {
 	timeFinal = amrData.Time();
       }
-      Print() << "... deleting fileData" << std::endl;
-      fileData.reset();	        
+      //Print() << "... deleting fileData" << std::endl;
+      //fileData.reset();	        
     }
     Print() << "Completed averaging." << std::endl;
     Print() << "Writing " << outfile << "..." << std::endl;
@@ -185,11 +185,11 @@ main (int   argc,
 	MultiFab::Multiply(*fileData,*fileData,0,0,nComp,0);
 	Print() << "... add to stdDevMF" << std::endl;
 	MultiFab::Saxpy(*stdDevMF,1.0/numFiles,*fileData,0,0,nComp,0);
-	Print() << "... deleting fileData" << std::endl;
-	fileData.reset();
+	//Print() << "... deleting fileData" << std::endl;
+	//fileData.reset();
       }
 
-      avgMF.reset();
+      //avgMF.reset();
       Print() << "Variation calculated, square rooting..." << std::endl;
       //is this the best way to do this?
       for (MFIter mfi(*stdDevMF,TilingIfNotGPU()); mfi.isValid(); ++mfi) {
@@ -203,7 +203,7 @@ main (int   argc,
       Print() << "Finished calculating stardard deviation." << std::endl;
       Print() << "Writing " << stdDevOutfile << "..." << std::endl;
       WriteSingleLevelPlotfile(stdDevOutfile,*stdDevMF,names_stddev,geoms,timeFinal-time0,levelSteps);
-      stdDevMF.reset();
+      //stdDevMF.reset();
     }
     
     }
