@@ -1,0 +1,108 @@
+#!/bin/bash
+
+set -x
+
+#parallel parameters
+export NPROC=16
+export OMP_NUM_THREADS=40
+#python running options
+export DOCANTERA=1
+#export DOJPDFS=1
+#physical conditions
+export T=700
+export PHI=0.4
+export ATM=40
+export KA=4
+#isosurface options
+export i_H2=90
+export PROG_H2=`echo "0.01*${i_H2}" | bc -l`
+
+if [ ${KA} -eq 0 ] || [ ${KA} -eq 1 ]
+then
+    export NPTS=100000
+elif [ ${KA} -eq 4 ]
+then
+    export NPTS=150000
+elif [ ${KA} -eq 12 ]
+then
+    export NPTS=200000
+elif [ ${KA} -eq 36 ]
+then
+    export NPTS=250000
+fi
+
+#streamline options
+export NCELLSPERLF=16
+export JHI=`echo "12*${NCELLSPERLF}" | bc -l`
+export NRK=`echo "2*${JHI} + 1" | bc -l`
+export HRK="0.25"
+export GROW=`echo "3*${NCELLSPERLF} + 2" | bc -l`
+
+mkdir properties
+echo ${T} > properties/T
+echo ${PHI} > properties/phi
+echo ${ATM} > properties/pressure
+
+if [ ${DOCANTERA} -eq 1 ]
+then
+    python laminarFlame.py
+fi    
+
+for PLT in `cat pltlist`;
+do
+    echo "calculating gradT"
+    mpirun -n $NPROC grad3d.gnu.MPI.ex inputs.process infile= ${PLT}
+    
+    echo "calculating progress variable H2"
+    mpirun -n $NPROC plotProg3d.gnu.MPI.ex inputs.process infile= ${PLT}
+
+    echo "combining plots for prog_strain"
+    mpirun -n $NPROC combinePlts3d.gnu.MPI.ex inputs.process infileL= ${PLT} infileR= ${PLT}_prog compsL= 0 1 2 29 30 compsR= 0 1 outfile= ${PLT}_prog_strain
+    
+    echo "calculating curvature of prog_H2"
+    mpirun -n $NPROC curvature3d.gnu.MPI.ex inputs.curvature progressName= prog_H2 infile= ${PLT}_prog_strain outfile= ${PLT}_prog_H2_K
+
+    echo "combining plots"
+    mpirun -n $NPROC combinePlts3d.gnu.MPI.ex inputs.process infileL=${PLT} infileR= ${PLT}_gt compsL= 0 1 2 6 13 29 30 compsR= 1 2 3 4 outfile=${PLT}_comb_gt
+    mpirun -n $NPROC combinePlts3d.gnu.MPI.ex inputs.process infileL= ${PLT}_comb_gt infileR= ${PLT}_prog_H2_K compsL= 3 4 10 compsR= 0 4 5 8 9 10 11 12 13 outfile= ${PLT}_combine
+
+    echo "generating isosurface"
+    mpirun -n $NPROC isosurface3d.gnu.MPI.ex inputs.process \
+	   comps= 3 \
+	   isoCompName= prog_H2 isoVal= ${PROG_H2} \
+	   infile=${PLT}_combine outfile= ${PLT}_prog_H2_${i_H2}.mef
+    
+    echo "running qslim"
+    ./qslim3d.gnu.ex -t ${NPTS} ${PLT}_prog_H2_${i_H2}.mef > ${PLT}_prog_H2_${i_H2}_${NPTS}.mef
+    
+    echo "making streamlines"
+    mpirun -n $NPROC partStream3d.gnu.MPI.ex infile= ${PLT}_combine \
+           isofile= ${PLT}_prog_H2_${i_H2}_${NPTS}.mef \
+           writeStreams=1 writeParticles=1 is_per= 1 1 0 \
+           outfile= ${PLT}_prog_H2_${i_H2}_${NPTS} Nsteps= ${JHI}
+    
+    echo "calcuating flame surface data"
+
+    ./streamBinTubeStats3d.gnu.OMP.ex infile= ${PLT}_prog_H2_${i_H2}_${NPTS}_streamBin \
+				      avgComps= StrainRate_prog_H2 \
+				      derComps= flameThickness flameSpeed \
+				      reacTemp= ${T} prodTemp= `cat properties/prodTemp` rhoY= `cat properties/rhoY` dumpPKZstreams= 0\
+				  
+				  
+    
+    #rm -r ${PLT}_comb_gt ${PLT}_combine ${PLT}_gt ${PLT}_prog ${PLT}_prog_H2_90_${NPTS}.mef ${PLT}_prog_H2_90_${NPTS}_particles ${PLT}_prog_H2_90_${NPTS}_stream ${PLT}_prog_H2_90_${NPTS}_streamBin ${PLT}_prog_H2_90.mef ${PLT}_prog_H2_K
+done
+    
+python temporalAveraging.py
+
+for PLT in `cat pltlist`;
+do
+  ./streamBinTubeStats3d.gnu.OMP.ex infile= ${PLT}_prog_H2_${i_H2}_${NPTS}_streamBin \
+ 				  avgComps= HeatRelease MeanCurvature_prog_H2 StrainRate_prog_H2\
+				  derComps= flameThickness flameSpeed principalCurvatureZones \
+				  reacTemp= ${T} prodTemp= `cat properties/prodTemp` rhoY= `cat properties/rhoY` pkzLength= `cat properties/ls` dumpPKZstreams= 1
+done
+
+
+#./surfStats3d.gnu.OMP.ex infiles= plt?????_prog_H2_${i_H2}_${NPTS}_streamBin turb= ${TURB} rhoY= `cat properties/rhoY` ls= `cat properties/ls` ss= `cat properties/ss` reacTemp= ${T} prodTemp= `cat properties/prodTemp` Ebar= `cat properties/Ebar`
+  
