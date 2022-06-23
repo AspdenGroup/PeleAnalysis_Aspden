@@ -379,7 +379,7 @@ main (int   argc,
 	int zone = surfDer[iElt][zoneComp];
 	areaZoneStreams_local[zone-1] += areaLoc; 
 	Real thermalThickness = surfDer[iElt][thermalThicknessComp];
-	lsStreams[zone-1] += thermalThicknessComp*areaLoc;
+	lsStreams[zone-1] += thermalThickness*areaLoc;
 	Real surfPoint[3];
 	for (int iComp=0; iComp<AMREX_SPACEDIM; iComp++) {
 	  Real surfFaceVal = 0.0;
@@ -458,8 +458,8 @@ main (int   argc,
     Vector<std::string> zoneNames = {"FF","LP","LE","SP","TE","TP"};        
 
     for (int z = 0; z<6; z++) {
-      std::ofstream lsos(filename.c_str(),std::ios::out);
       filename = infile+"/"+zoneNames[z]+"_ls.dat";
+      std::ofstream lsos(filename.c_str(),std::ios::out);
       if (areaZoneStreams[z] > 0) {
 	lsStreams[z] /= areaZoneStreams[z];
       }
