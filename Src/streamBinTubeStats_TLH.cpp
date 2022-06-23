@@ -8,7 +8,7 @@
 
 using namespace amrex;
 
-#include <streamBinTubeStats.H>
+#include <streamBinTubeStats_TLH.H>
 
 int
 main (int   argc,
