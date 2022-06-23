@@ -103,6 +103,8 @@ do
 				  reacTemp= ${T} prodTemp= `cat properties/prodTemp` rhoY= `cat properties/rhoY` pkzLength= `cat properties/ls` dumpPKZstreams= 1
 done
 
+mkdir PKZstreams
 
+python temporalAveragingStreams.py
 #./surfStats3d.gnu.OMP.ex infiles= plt?????_prog_H2_${i_H2}_${NPTS}_streamBin turb= ${TURB} rhoY= `cat properties/rhoY` ls= `cat properties/ls` ss= `cat properties/ss` reacTemp= ${T} prodTemp= `cat properties/prodTemp` Ebar= `cat properties/Ebar`
   
