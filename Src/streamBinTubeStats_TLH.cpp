@@ -171,7 +171,6 @@ main (int   argc,
   Vector<Vector<Vector<Real>>> PKZstreams;
   Vector<Real> areaZoneStreams;
   Vector<Real> lsStreams;
-  Vector<Real> sVect;
   if(dumpPKZstreams) {
     PKZstreams.resize(nComps-AMREX_SPACEDIM+1);
     lsStreams.resize(6);
@@ -184,7 +183,6 @@ main (int   argc,
         }
       }
     }
-    sVect.resize(nPtsOnStream);
     areaZoneStreams.resize(6);
     lsStreams.resize(6);
     for (int i=0; i<6;i++) {
@@ -431,9 +429,9 @@ main (int   argc,
       for (int z=0;z<6;z++) {
 	areaZoneStreams[z] += areaZoneStreams_local[z];
 	lsStreams[z] += lsStreams_local[z];
-	for (int iComp=0; iComp<nComps-AMREX_SPACEDIM+1; iComp++) {
+	for (int iComp=AMREX_SPACEDIM-1; iComp<nComps; iComp++) {
 	  for (int iPt = 0; iPt<nPtsOnStream; iPt++) {
-	    PKZstreams[iComp][z][iPt] += PKZstreams_local[iComp][z][iPt];
+	    PKZstreams[iComp-AMREX_SPACEDIM+1][z][iPt] += PKZstreams_local[iComp-AMREX_SPACEDIM+1][z][iPt];
 	  }
 	}
       }
