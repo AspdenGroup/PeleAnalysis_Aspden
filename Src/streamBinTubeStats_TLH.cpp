@@ -1,3 +1,4 @@
+
 #include <string>
 #include <iostream>
 #include <vector>
@@ -32,8 +33,13 @@ main (int   argc,
   pp.query("writeTecplotSurfaceFromStream",writeTecplotSurfaceFromStream);
   int writeBasic(0);
   pp.query("writeBasic",writeBasic);
+  int writeSurface= 1;
+  pp.query("writeSurface", writeSurface);
+  
   std::string fuelName="H2";
   pp.query("fuelName",fuelName);
+  Real percOfMean;
+  pp.get("percOfMean",percOfMean);
   // declare size and data holders
   int nStreams, nElts, nPtsOnStream, nComps;
   Vector<std::string> variableNames;
@@ -49,9 +55,10 @@ main (int   argc,
   Print() << "nPtsOnStreams = " << nPtsOnStream << std::endl;
   Print() << "nComps        = " << nComps << std::endl;
   Print() << "Variable names:" << std::endl;
-  for (int iComp=0; iComp<nComps; iComp++)
-    Print() << "   " << iComp << ": " << variableNames[iComp] << std::endl;
 
+  for (int iComp=0; iComp<nComps; iComp++) 
+    Print() << "   " << iComp << ": " << variableNames[iComp] << std::endl;
+  
   // let's write a matlab file for each variable
   if (writeStreamsToMatlab) {
     Print() << "Writing streams as matlab files..." << std::endl;
@@ -121,11 +128,14 @@ main (int   argc,
       std::string FCRVar=fuelName+"_ConsumptionRate";
       pp.query("FCRVar",FCRVar);
       derIdxIn[iDerFlag].push_back(getVarIdx(FCRVar,variableNames,nComps)); //add FCR idx
-      derIdxOut[iDerFlag].resize(1); //one out idx (flamespeed)
-      localDerOut += 1;
-      derIdxOut[iDerFlag][0] = localDerOut;
+      derIdxOut[iDerFlag].resize(2); //two out idx (flamespeed, reducedvol)
+      for (int iDer = 0; iDer<2; iDer++) {
+	localDerOut += 1;
+	derIdxOut[iDerFlag][iDer] = localDerOut;
+      }
       derCompsOut.push_back("flameSpeed");
-      nDerOut += 1;
+      derCompsOut.push_back("reducedVol");
+      nDerOut += 2;
     }
     if (derCompsIn[iDerFlag]=="principalCurvatureZones") {
       std::string pkzMkVar = "MeanCurvature_prog_"+fuelName;
@@ -149,7 +159,10 @@ main (int   argc,
     }
   }
   AMREX_ALWAYS_ASSERT(derCompsOut.size() == nDerOut); //just a check on derive components out
-  
+  Print() << "Derived components: " << std::endl;
+  for (int iDer = 0; iDer<nDerOut; iDer++) {
+    Print() << derCompsOut[iDer] << std::endl;
+  }
   
   // make space to hold output surface
   // for each element (i.e. triangle), we have three coordinates and one set of data
@@ -157,6 +170,7 @@ main (int   argc,
   // connectivity follows naturally from construction
   Vector<Real>         eltArea(nElts);
   Vector<Real>         eltVol(nElts);
+  Vector<Real>         eltRatio(nElts);
   Vector<Vector<dim3>> surfLocs(nElts);
   Vector<Vector<Real>> surfAvg(nElts);
   Vector<Vector<Real>> surfInt(nElts);
@@ -167,6 +181,7 @@ main (int   argc,
   int surfPt = (nPtsOnStream-1)/2; // stream data location counts from zero    
   // set locations
 
+  
   int dumpPKZstreams = 0; pp.query("dumpPKZstreams", dumpPKZstreams);
   Vector<Vector<Vector<Real>>> PKZstreams;
   Vector<Real> areaZoneStreams;
@@ -191,7 +206,6 @@ main (int   argc,
     }
   }
 
-  
   Print() << "Setting locations, making triangles, resizing arrays ..." << std::endl;
   
   // get the three stream indices from connectivity faceData
@@ -220,7 +234,7 @@ main (int   argc,
   dim3 D,E,F;
   int iPt;
   Real totalVol=0.0;
-
+  Real meanRatio = 0.0;
 #ifdef _OPENMP
 #pragma omp parallel for schedule(static) private(iElt,iCorner,A,B,C,D,E,F,d,iPt) shared(eltArea,eltVol,streamData) reduction(+: surfaceArea,totalVol)
 #endif
@@ -249,18 +263,19 @@ main (int   argc,
       eltVol[iElt] += wedge_volume(A,B,C,D,E,F);
       totalVol += wedge_volume(A,B,C,D,E,F);
     }
+    eltRatio[iElt] = eltArea[iElt]/eltVol[iElt];
+    meanRatio += eltArea[iElt]/eltVol[iElt];
   }
+  meanRatio /= nElts;
   Print() << "   ... total surface area = " << surfaceArea << std::endl;
-  Print() << " ... total volume = " << totalVol << std::endl;
-    
-  
+  Print() << "   ... total volume = " << totalVol << std::endl;
 
   // calculate averages
   //Print() << "Calculating averages ..." << std::endl;
   int iAvg, iInt, iDerFlag;
   int3 localSIdx;
   Vector<Vector<Real>> localStreamData;
-  Real areaLoc;
+  Real areaLoc,volLoc;
   Real filels = 0;
   Real filess = 0;
   Real fileEbar = 0;
@@ -271,11 +286,29 @@ main (int   argc,
     amrex::Print() << "Getting Ebar, index: " << strainIdx << std::endl;
   }
   
-  
+  Real normAreaLS = surfaceArea; 
+  Real normAreaSS = surfaceArea;
+  Real normAreaEBAR = surfaceArea;
+
   Print() << "Iterating over elements ..." << std::endl;
-  
+  int numFixedElts = 0;
+  Real ds=-1;
+  //calc streamLength from first stream of first element (should all be the same)?
+  for (iElt=0; iElt<nElts-1; iElt++) {
+    Real ds1 = std::sqrt((streamData[sIdx[iElt][0]][1]-streamData[sIdx[iElt][0]][0])*(streamData[sIdx[iElt][0]][1]-streamData[sIdx[iElt][0]][0]) + (streamData[sIdx[iElt][0]][nPtsOnStream + 1]-streamData[sIdx[iElt][0]][nPtsOnStream])*(streamData[sIdx[iElt][0]][nPtsOnStream + 1]-streamData[sIdx[iElt][0]][nPtsOnStream]) + (streamData[sIdx[iElt][0]][2*nPtsOnStream + 1]-streamData[sIdx[iElt][0]][2*nPtsOnStream])*(streamData[sIdx[iElt][0]][2*nPtsOnStream + 1]-streamData[sIdx[iElt][0]][2*nPtsOnStream]));
+    Real ds2 = std::sqrt((streamData[sIdx[iElt+1][0]][1]-streamData[sIdx[iElt+1][0]][0])*(streamData[sIdx[iElt+1][0]][1]-streamData[sIdx[iElt+1][0]][0]) + (streamData[sIdx[iElt+1][0]][nPtsOnStream + 1]-streamData[sIdx[iElt+1][0]][nPtsOnStream])*(streamData[sIdx[iElt+1][0]][nPtsOnStream + 1]-streamData[sIdx[iElt+1][0]][nPtsOnStream]) + (streamData[sIdx[iElt+1][0]][2*nPtsOnStream + 1]-streamData[sIdx[iElt+1][0]][2*nPtsOnStream])*(streamData[sIdx[iElt+1][0]][2*nPtsOnStream + 1]-streamData[sIdx[iElt+1][0]][2*nPtsOnStream]));
+    //AMREX_ALWAYS_ASSERT(ds1==ds2);
+    if (ds1 == ds2) {
+      ds = ds1; //check later
+      break;
+    }
+  }
+  if (ds < 0) {
+    Abort("ds broken");
+  }
+    
 #ifdef _OPENMP
-#pragma omp parallel for schedule(static) reduction(+: filess,filels,fileEbar) private(iElt,d,localSIdx,localStreamData,iAvg,iInt,iDerFlag,areaLoc) shared(surfAvg,nAvg,surfInt,nInt,surfDer,nDerFlag,streamData,nPtsOnStream,derIdxIn,derIdxOut,derCompsIn,pkzFF)
+#pragma omp parallel for schedule(static) reduction(+: filess,filels,fileEbar,numFixedElts) private(iElt,d,localSIdx,localStreamData,iAvg,iInt,iDerFlag,areaLoc,volLoc) shared(surfAvg,nAvg,surfInt,nInt,surfDer,nDerFlag,streamData,nPtsOnStream,derIdxIn,derIdxOut,derCompsIn,pkzFF,ds)
 #endif
   for (iElt=0; iElt<nElts; iElt++) {
     //get thread-local stream index, data and element area
@@ -285,13 +318,19 @@ main (int   argc,
       localStreamData[d] = streamData[localSIdx[d]];
     }
     areaLoc = eltArea[iElt];
+    volLoc = eltVol[iElt];
+    Real ratioLoc = areaLoc/volLoc;//volLoc/areaLoc;
 
     // evaluate average of each component over the three points
     for (iAvg=0; iAvg<nAvg; iAvg++) {
       surfAvg[iElt][iAvg] = calcAvgVal(avgIdx[iAvg],nPtsOnStream,localStreamData);
     }
     if (getEbar) {
-      fileEbar += surfAvg[iElt][strainIdx]*areaLoc;
+      if (std::isfinite(surfAvg[iElt][strainIdx])) {
+	fileEbar += surfAvg[iElt][strainIdx]*areaLoc;
+      } else {
+	normAreaEBAR -= areaLoc;
+      }
     }
     for (iInt=0; iInt<nInt; iInt++) {
       surfInt[iElt][iInt] = calcIntegral(intIdx[iInt],nPtsOnStream,localStreamData,areaLoc);
@@ -302,13 +341,24 @@ main (int   argc,
        outComp = derIdxOut[iDerFlag][0];
        surfDer[iElt][outComp] = deltaT/calcMax(derIdxIn[iDerFlag][0],nPtsOnStream,localStreamData);
 	// sum for mean
-       filels += surfDer[iElt][outComp] * areaLoc;
+       if (std::isfinite(surfDer[iElt][outComp])) {
+	 filels += surfDer[iElt][outComp] * areaLoc;
+       } else {
+	 normAreaLS -= areaLoc;
+       }
      }
      if (derCompsIn[iDerFlag]=="flameSpeed") {
        outComp = derIdxOut[iDerFlag][0];
        surfDer[iElt][outComp] = calcIntegral(derIdxIn[iDerFlag][0],nPtsOnStream,localStreamData,areaLoc)/rhoY;
        // sum for mean
-       filess += surfDer[iElt][outComp] * areaLoc;
+       //Print() << ratioLoc/(ds*nPtsOnStream) << std::endl;
+       if (std::isfinite(surfDer[iElt][outComp])) {
+	 filess += surfDer[iElt][outComp] * areaLoc;
+       } else {
+	 normAreaSS -= areaLoc;
+       }
+       
+       
      }
      if (derCompsIn[iDerFlag]=="principalCurvatureZones") {
        Real avgMk = calcAvgVal(derIdxIn[iDerFlag][0],nPtsOnStream,localStreamData);
@@ -335,26 +385,98 @@ main (int   argc,
        outComp = derIdxOut[iDerFlag][2];
        surfDer[iElt][outComp]=zone;
      }
-     
     }
+    for (iDerFlag=0; iDerFlag<nDerFlag; iDerFlag++) {
+      if (derCompsIn[iDerFlag]=="flameSpeed") {
+	for (int jDerFlag=0; jDerFlag<nDerFlag; jDerFlag++) {
+	  if (derCompsIn[jDerFlag]=="principalCurvatureZones") {
+	    Real zone = surfDer[iElt][derIdxOut[jDerFlag][2]];
+	    if (zone < 1.5 || zone > 3.5) { //not leading point or edge
+	      if (ratioLoc < percOfMean*meanRatio) {
+		int nPtsOnReducedStream = (int)((ratioLoc/(percOfMean*meanRatio))*nPtsOnStream);
+		//Print() << nPtsOnReducedStream << "/" << nPtsOnStream << std::endl;
+		numFixedElts += 1;
+		if (nPtsOnReducedStream >= nPtsOnStream) {
+		  Print() << nPtsOnReducedStream << std::endl;
+		  Abort("Too many points on reduced stream");
+		}
+		if ( (nPtsOnStream - nPtsOnReducedStream) % 2 == 1) {
+		  nPtsOnReducedStream -= 1;
+		}
+		outComp = derIdxOut[iDerFlag][0];
+		surfDer[iElt][outComp] = calcAdjustedIntegral(derIdxIn[iDerFlag][0],nPtsOnStream,nPtsOnReducedStream,localStreamData,areaLoc)/rhoY;
+		outComp = derIdxOut[iDerFlag][1];
+		surfDer[iElt][outComp] = 1;
+	      } else {
+		outComp = derIdxOut[iDerFlag][1];
+		surfDer[iElt][outComp] = 0;		   
+	      }
+	    }
+	  }
+	}       
+      } 
+    }
+
     
+  
   }
-  filels /= surfaceArea;
-  filess /= surfaceArea;
-  fileEbar /= surfaceArea;
+  Print() << "Number of elements length changed (area/volume ratio off): " << numFixedElts << "/" << nElts << std::endl;
+  if (numFixedElts == nElts) {
+    Print() << "ds = " << ds << std::endl;
+    Abort("every element getting trimmed?");
+  }
+  filels /= normAreaLS;
+  filess /= normAreaSS;
+  fileEbar /= normAreaEBAR;
   //array reducing stuff (JPDFs, conditionally averaged streamlines)
   //stuff for zone averaging
+  
+  Print() << "Sorting elements with out of bound streams" << std::endl;
+  int tempIdx = getVarIdx("Temp",variableNames,nComps);
+  Vector<int> outOfBounds(nElts);
+  int numOOB = 0;
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static) private(iElt,localSIdx,localStreamData,d) reduction(+: numOOB) shared(outOfBounds)
+#endif    
+  for (iElt=0; iElt<nElts; iElt++) { 
+    localSIdx = sIdx[iElt];
+    localStreamData.resize(AMREX_SPACEDIM);
+    for (d=0; d<AMREX_SPACEDIM; d++) {
+      localStreamData[d] = streamData[localSIdx[d]];
+    }
+    Real endTemp[3];
+    Real startTemp[3];
+    //weird backwardness?
+    for (d=0;d<AMREX_SPACEDIM;d++) {
+      endTemp[d] = localStreamData[d][nPtsOnStream*tempIdx]; 
+      startTemp[d] = localStreamData[d][nPtsOnStream*tempIdx + nPtsOnStream - 1];
+    }
+    if (endTemp[0] <= startTemp[0] || endTemp[1] <= startTemp[1] || endTemp[2] <= startTemp[2]) {
+      outOfBounds[iElt] = 1;
+      numOOB += 1;
+    } else {
+      outOfBounds[iElt] = 0;
+    }
+  }
 
-  int zoneComp, thermalThicknessComp;
+  Print() << "Number of elements with out of bound streams: " << numOOB << "/" << nElts << std::endl;
+  
+  int zoneComp = -1;
+  int thermalThicknessComp = -1;
   for (iDerFlag=0; iDerFlag<nDerFlag; iDerFlag++) {
     if (derCompsIn[iDerFlag]=="principalCurvatureZones") {
       zoneComp = derIdxOut[iDerFlag][2];
     }
-    if (derCompsIn[iDerFlag]=="thermalThickness") {
+    if (derCompsIn[iDerFlag]=="flameThickness") {
       thermalThicknessComp = derIdxOut[iDerFlag][0];
     }
   }
-  Real ds;
+  if (zoneComp < 0 && dumpPKZstreams) {
+    Abort("can't find zone comp");
+  }
+  if (thermalThicknessComp < 0 && dumpPKZstreams) {
+    Abort("can't find thermal thickness comp");
+  }
 #ifdef _OPENMP
   #pragma omp parallel
   {
@@ -363,7 +485,7 @@ main (int   argc,
     Vector<Real> areaZoneStreams_local(areaZoneStreams);
     Vector<Real> lsStreams_local(lsStreams);
 #ifdef _OPENMP
-#pragma omp for schedule(static) private(iElt,d,localSIdx,localStreamData)
+#pragma omp for schedule(static) private(iElt,localSIdx,localStreamData,areaLoc,iPt,d)
 #endif    
     for (iElt=0; iElt<nElts; iElt++) { 
       localSIdx = sIdx[iElt];
@@ -373,11 +495,12 @@ main (int   argc,
       }
       
       areaLoc = eltArea[iElt];
-      if (dumpPKZstreams) {
+      if (dumpPKZstreams && outOfBounds[iElt] == 0) {
 	int zone = surfDer[iElt][zoneComp];
-	areaZoneStreams_local[zone-1] += areaLoc; 
+	areaZoneStreams_local[zone-1] += areaLoc;
+	
 	Real thermalThickness = surfDer[iElt][thermalThicknessComp];
-	lsStreams[zone-1] += thermalThickness*areaLoc;
+	lsStreams_local[zone-1] += thermalThickness*areaLoc;
 	Real surfPoint[3];
 	for (int iComp=0; iComp<AMREX_SPACEDIM; iComp++) {
 	  Real surfFaceVal = 0.0;
@@ -387,7 +510,7 @@ main (int   argc,
 	  surfFaceVal /= (Real)AMREX_SPACEDIM;
 	  surfPoint[iComp] = surfFaceVal;
 	}
-	for (int iPt = 0; iPt<nPtsOnStream; iPt++) {	  
+	for (iPt = 0; iPt<nPtsOnStream; iPt++) {	  
 	  Real facePoint[3];	    
 	  for (int iComp=0; iComp<AMREX_SPACEDIM; iComp++) {
 	    Real faceVal = 0.0;
@@ -398,18 +521,20 @@ main (int   argc,
 	    facePoint[iComp] = faceVal;	    
 	  }
 	  Real dist = 0.0;
-	  for (d=0;d<AMREX_SPACEDIM;d++) {
+	  for ( d=0;d<AMREX_SPACEDIM;d++) {
 	    dist += (facePoint[d]-surfPoint[d])*(facePoint[d]-surfPoint[d]);
 	  }
 	  dist = std::sqrt(dist);
 	  if (iPt > surfPt) {
 	    dist *= -1;
 	  }
-	  PKZstreams_local[0][zone-1][iPt] += dist*areaLoc; 
+	  
+	  //Print() << zone << " " << iPt << std::endl;
+	  PKZstreams_local[0][zone-1][iPt] += dist*areaLoc;
 	}
 	//probably swap these loop round but cba
 	for (int iComp=AMREX_SPACEDIM; iComp<nComps; iComp++) {
-	  for (int iPt = 0; iPt<nPtsOnStream; iPt++) {
+	  for (iPt = 0; iPt<nPtsOnStream; iPt++) {
 	    Real faceVal = 0.0;
 	    for (d=0;d<AMREX_SPACEDIM;d++) {
 	      faceVal += localStreamData[d][nPtsOnStream*iComp + iPt];
@@ -488,16 +613,17 @@ main (int   argc,
     }
   }
 
+  if (writeSurface) {
+    // write surface
   
-  // write surface
-  Print() << "Writing surface ..." << std::endl;
-  writeSurfaceTecplot(infile,
-		      nElts, eltArea,  eltVol,  surfLocs,
-		      nAvg,  avgComps, surfAvg,
-		      nInt,  intComps, surfInt,
-		      nDerOut,  derCompsOut, surfDer);
-  Print() << "   ... done" << std::endl;
-
+    Print() << "Writing surface ..." << std::endl;
+    writeSurfaceTecplot(infile,
+			nElts, eltArea,  eltVol,  surfLocs,
+			nAvg,  avgComps, surfAvg,
+			nInt,  intComps, surfInt,
+			nDerOut,  derCompsOut, surfDer);
+    Print() << "   ... done" << std::endl;
+  }
   // write basic
   if (writeBasic) {
     Print() << "Writing basic file ..." << std::endl;
@@ -551,6 +677,7 @@ Real calcMax(int compIdx, int nPtsOnStream, Vector<Vector<Real>> streamData) {
 Real calcIntegral(int compIdx, int nPtsOnStream, Vector<Vector<Real>> streamData, Real eltArea) {
 
   Real integral = 0.;
+  
   // integrate
   dim3 A,B,C,D,E,F;
   for (int iPt=1; iPt<nPtsOnStream; iPt++) {
@@ -575,7 +702,32 @@ Real calcIntegral(int compIdx, int nPtsOnStream, Vector<Vector<Real>> streamData
   return integral;
 }
 
+Real calcAdjustedIntegral(int compIdx, int nPtsOnStream, int nPtsOnReducedStream, Vector<Vector<Real>> streamData, Real eltArea) {
 
+  Real integral = 0.;
+  int diff = (nPtsOnStream - nPtsOnReducedStream)/2;
+  // integrate
+  dim3 A,B,C,D,E,F;
+  for (int iPt=1+diff; iPt<nPtsOnStream-diff; iPt++) {
+    for (int d=0; d<AMREX_SPACEDIM; d++) { // three components of location
+      A[d] = streamData[0][nPtsOnStream*d+iPt-1];
+      B[d] = streamData[1][nPtsOnStream*d+iPt-1];
+      C[d] = streamData[2][nPtsOnStream*d+iPt-1];
+      D[d] = streamData[0][nPtsOnStream*d+iPt];
+      E[d] = streamData[1][nPtsOnStream*d+iPt];
+      F[d] = streamData[2][nPtsOnStream*d+iPt];
+    }
+    Real vA = streamData[0][nPtsOnStream*compIdx+iPt-1];
+    Real vB = streamData[1][nPtsOnStream*compIdx+iPt-1];
+    Real vC = streamData[2][nPtsOnStream*compIdx+iPt-1];
+    Real vD = streamData[0][nPtsOnStream*compIdx+iPt];
+    Real vE = streamData[1][nPtsOnStream*compIdx+iPt];
+    Real vF = streamData[2][nPtsOnStream*compIdx+iPt];
+    integral += wedge_volume_int(A,vA,B,vB,C,vC,D,vD,E,vE,F,vF);
+  } 
+  integral /= eltArea;
+  return integral;
+}
 
 //
 // break up the variable list
