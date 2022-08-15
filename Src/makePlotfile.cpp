@@ -4,8 +4,7 @@
 #include <AMReX_ParmParse.H>
 #include <AMReX_MultiFab.H>
 #include <AMReX_DataServices.H>
-#include <WritePlotFile.H>
-#include <AppendToPlotFile.H>
+#include <AMReX_PlotFileUtil.H>
 
 #include <AMReX_BLFort.H>
 
@@ -59,7 +58,7 @@ int main(int argc, char *argv[])
 
   // read in the variable names to use
   int nVars=pp.countval("names");
-  std::string names[nVars];
+  Vector<std::string> names; names.resize(nVars);
   if (verbose) std::cout << "variables =";
   for (int iVar=0; iVar<nVars; iVar++) {
     pp.get("names",names[iVar],iVar);
@@ -122,7 +121,8 @@ int main(int argc, char *argv[])
   }
   if (verbose) std::cout << "probHi = "
 			 << probHi[0] << " " << probHi[1] << " " << probHi[2] << std::endl;
-
+  RealBox rb(probLo,probHi); // make real box for geometry
+  Vector<int> is_per(AMREX_SPACEDIM,0); //hard code to no periodicity for the minute
   Real dx[3];
   for (int i=0; i<3; i++) {
     dx[i] = (probHi[i]-probLo[i])/(Real)nx[i];
@@ -137,7 +137,8 @@ int main(int argc, char *argv[])
   IntVect     pdLo(0,0,0);
   IntVect     pdHi(nx[0]-1,nx[1]-1,nx[2]-1);
   Box         probDomain(pdLo,pdHi);
-
+  int coord = 0; //hard code cartesian
+  Geometry geoms(probDomain, &rb, coord, &(is_per[0]));
   // make a box for each file
   int         nBoxes(nFiles);
   BoxArray    domainBoxArray(nBoxes);
@@ -171,10 +172,10 @@ int main(int argc, char *argv[])
     pmap[iBox] = myProc; // maybe think about hacking this to parallelise this step
   DistributionMapping domainDistMap(pmap);
 
-  // make desination multifab (broken)
+  
   MultiFab *mf;
-  mf = new MultiFab(domainBoxArray,nVars,0);
-
+  mf = new MultiFab(domainBoxArray,domainDistMap,nVars,0);
+  int slicenum; pp.get("slicenum", slicenum);
   //
   // Populate data
   //
@@ -184,7 +185,7 @@ int main(int argc, char *argv[])
   // how do we loop over the boxes in the multifab properly?
   int iFile=0;
   for (MFIter mfi(*mf); mfi.isValid(); ++mfi) {
-
+    
     // destination fab
     FArrayBox& myFab = (*mf)[mfi];
     
@@ -193,7 +194,11 @@ int main(int argc, char *argv[])
     ifs.open(infile[iFile].c_str());
     fab.readFrom(ifs);
     ifs.close();
+    IntVect shift = {0,0,iFile-slicenum};
+    fab.shift(shift);
     const Box& inBox = fab.box();
+    //amrex::Print() << "inBox = " << inBox << std::endl;
+    //amrex::Print() << "myFab box= " << myFab.box() << std::endl;
     for (int dir=0; dir<2; dir++) {
       if (inBox.length(dir)!=nx[dir]) {
 	std::cerr << "file = " << infile[iFile] << std::endl;
@@ -214,124 +219,8 @@ int main(int argc, char *argv[])
   if (verbose) {
     std::cout << "*** writing plotfile " << std::endl;
   }
-  if(ParallelDescriptor::IOProcessor()) {
-    if( ! amrex::UtilCreateDirectory(outfile, 0755)) {
-      amrex::CreateDirectoryFailed(outfile);
-    }
-  }
-  //
-  // Force other processors to wait till directory is built.
-  //
-  ParallelDescriptor::Barrier();
-	   
-  std::string outfileHeader(outfile);
-  outfileHeader += "/Header";
-  
-  VisMF::IO_Buffer io_buffer(VisMF::IO_Buffer_Size);
-  
-  std::ofstream os;
-  
-  os.rdbuf()->pubsetbuf(io_buffer.dataPtr(), io_buffer.size());
-  
-  int i;
-  if(ParallelDescriptor::IOProcessor()) {
-    if (verbose) {
-	std::cout << "Opening file = " << outfileHeader << '\n';
-    }
-    
-    os.open(outfileHeader.c_str(), std::ios::out|std::ios::binary);
-    
-    if(os.fail()) {
-      amrex::FileOpenFailed(outfileHeader);
-    }
-    //
-    // Start writing plotfile.
-    //
-    os << "NavierStokes-V1.1" << '\n';
-    os << nVars << '\n';
-    for (int iVar=0; iVar<nVars; iVar++)
-      os << names[iVar] << '\n';
-    os << BL_SPACEDIM << '\n';
-    os << time << '\n';
-    int nLevels(1);
-    os << nLevels-1 << '\n';
-    for(i = 0; i < BL_SPACEDIM; i++) os << probLo[i] << ' ';
-    os << '\n';
-    for(i = 0; i < BL_SPACEDIM; i++) os << probHi[i] << ' ';
-    os << '\n';
-    os << ' '; // refRatio
-    os << '\n';
-    os << probDomain;
-    os << '\n';
-    os << "0\n"; // level steps
-    for(int k = 0; k < BL_SPACEDIM; k++) os << dx[k] << ' ';
-    os << '\n';
-    os << "0\n"; // coordSys
-    os << "0\n"; // The bndry data width.
-  }  // end if(ioproc)
-	   
-  //
-  // Write out level by level.
-  //
-  int iLevel=0;
-  int nGrids(domainBoxArray.size());
-  char buf[64];
-  sprintf(buf, "Level_%d", iLevel);
-    
-  if(ParallelDescriptor::IOProcessor()) {
-    os << iLevel << ' ' << nGrids << ' ' << time << '\n';
-    os << 0 << '\n';
-      
-    for(i = 0; i < nGrids; ++i) {
-      for(int n = 0; n < BL_SPACEDIM; n++) {
-	os << probLo[n] 
-	   << ' '
-	   << probHi[n]
-	   << '\n';
-      }
-    }
-    //
-    // Build the directory to hold the MultiFabs at this level.
-    //
-    std::string Level(outfile);
-    Level += '/';
-    Level += buf;
-      
-    if( ! amrex::UtilCreateDirectory(Level, 0755)) {
-      amrex::CreateDirectoryFailed(Level);
-    }
-  }  // end if(ioproc)
-  //
-  // Force other processors to wait till directory is built.
-  //
-  ParallelDescriptor::Barrier();
-    
-  // Now build the full relative pathname of the MultiFab.
-  static const std::string MultiFabBaseName("/MultiFab");
-    
-  std::string PathName(outfile);
-  PathName += '/';
-  PathName += buf;
-  PathName += MultiFabBaseName;
-
-  if (verbose) std::cout << "Writing data..." << std::endl;
-  
-  if(ParallelDescriptor::IOProcessor()) {
-    // The full name relative to the Header file.
-    std::string RelativePathName(buf);
-    RelativePathName += MultiFabBaseName;
-    os << RelativePathName << '\n';
-  }
-  VisMF::Write(*mf, PathName);
-  
-  os.close();
-  
-  if(ParallelDescriptor::IOProcessor()) {
-    std::cout << "*** done writing plotfile " << std::endl;
-  }
-  DataServices::Dispatch(DataServices::ExitRequest, NULL);
-  // ^^^ this calls ParallelDescriptor::EndParallel() and exit()
-
+  int levelSteps;
+  WriteSingleLevelPlotfile(outfile,*mf,names, geoms,time,levelSteps);
 }
 
 
