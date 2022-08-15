@@ -175,7 +175,6 @@ int main(int argc, char *argv[])
   
   MultiFab *mf;
   mf = new MultiFab(domainBoxArray,domainDistMap,nVars,0);
-  int slicenum; pp.get("slicenum", slicenum);
   //
   // Populate data
   //
@@ -194,7 +193,7 @@ int main(int argc, char *argv[])
     ifs.open(infile[iFile].c_str());
     fab.readFrom(ifs);
     ifs.close();
-    IntVect shift = {0,0,iFile-slicenum};
+    IntVect shift = {0,0,iFile-fab.box().smallEnd(2)};
     fab.shift(shift);
     const Box& inBox = fab.box();
     //amrex::Print() << "inBox = " << inBox << std::endl;
