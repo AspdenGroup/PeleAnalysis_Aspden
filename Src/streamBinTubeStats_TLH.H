@@ -10,13 +10,15 @@ std::vector<std::string> parseVarNames(std::istream& is);
 
 int getVarIdx(std::string varName, Vector<std::string> variableNames, int nComps);
 
-
 Real calcAvgVal(int compIdx, int nPtsOnStream, Vector<Vector<Real>> streamData);
 
 Real calcMax(int compIdx, int nPtsOnStream, Vector<Vector<Real>> streamData);
 
 Real calcIntegral(int compIdx, int nPtsOnStream, Vector<Vector<Real>> streamData, Real eltArea);
 
+Real calcAdjustedIntegral(int compIdx, int nPtsOnStream, int nPtsOnReducedStream, Vector<Vector<Real>> streamData, Real eltArea);
+
+int streamReduce(int nPtsOnStream, Vector<Vector<Real>> streamData, Real eltArea, Real eltVol);
 
 void readStreamBin(std::string infile,
 		   int& nStreams, int& nElts, int& nPtsOnStream, int& nComps,
