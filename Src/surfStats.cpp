@@ -32,7 +32,7 @@ main (int   argc,
   Real ss = 0.0;
   Real Ebar = 0.0;
   int nBin = 100;
-  Real minL,maxL,minS,maxS,minK,maxK,minE,maxE,mink1,maxk1,mink2,maxk2;//,minStretch,maxStretch;
+  Real minL,maxL,minS,maxS,minK,maxK,minE,maxE,mink1,maxk1,mink2,maxk2,minStretch,maxStretch;
   int turb = 0;
   pp.query("turb",turb);
   pp.query("nBin",nBin);
@@ -80,12 +80,12 @@ main (int   argc,
     
   }
 		
-  /*
+  
   Real M,M1,M2;
   pp.get("M",M);
   pp.get("M1",M1);
   pp.get("M2",M2);
-  */
+  
   
   Real tau_input = ls_input/ss_input;
   Real Ebar_input = EbarT;// /tau_input;
@@ -113,6 +113,8 @@ main (int   argc,
     maxk1 = maxK;
     mink2 = minK;
     maxk2 = maxK;
+    minStretch = -1;
+    maxStretch = 3;
   } else {
     minL = 0.0;
     maxL = 1.5;
@@ -126,6 +128,8 @@ main (int   argc,
     maxk1 = maxK;
     mink2 = minK;
     maxk2 = maxK;
+    minStretch = -1;
+    maxStretch = 3;
   }
   
     
@@ -153,8 +157,8 @@ main (int   argc,
   mink2 /= ls_input;
   pp.query("maxk2",maxk2);
   maxk2 /= ls_input;
-  //pp.query("maxStretch",maxStretch);
-  //pp.query("minStretch",minStretch);
+  pp.query("maxStretch",maxStretch);
+  pp.query("minStretch",minStretch);
   
   Vector<Real> sBins(nBin);
   Real ds = (maxS-minS)/(Real)nBin; 
@@ -168,8 +172,8 @@ main (int   argc,
   Real dk1 = (maxk1-mink1)/(Real)nBin;
   Vector<Real> k2Bins(nBin);
   Real dk2 = (maxk2-mink2)/(Real)nBin; 
-  //Vector<Real> stretchBins(nBin);
-  //Real dS = (maxStretch-minStretch)/(Real)nBin;
+  Vector<Real> stretchBins(nBin);
+  Real dS = (maxStretch-minStretch)/(Real)nBin;
   
   Vector<Real> fractionalContribution(12);
   for (int iBin = 0; iBin < nBin; iBin++) {
@@ -179,12 +183,15 @@ main (int   argc,
     EBins[iBin] = minE + (Real)iBin*de;
     k1Bins[iBin] = mink1 + (Real)iBin*dk1;
     k2Bins[iBin] = mink2 + (Real)iBin*dk2;
+    stretchBins[iBin] = minStretch + (Real)iBin*dS;
   }
   Vector<Vector<Real>> ksJPDF(nBin);
   Vector<Vector<Real>> EsJPDF(nBin); 
   Vector<Vector<Real>> k1k2JPDF(nBin);
   Vector<Vector<Real>> k1k2FMJPDF(nBin);
   Vector<Vector<Vector<Real>>> kEsJPDF(nBin);
+  Vector<Vector<Real>> stretchsJPDF(nBin);
+  Vector<Vector<Real>> stretchIndsJPDF(nBin);
   
   for (int iBin = 0; iBin < nBin; iBin++) {
     
@@ -193,11 +200,15 @@ main (int   argc,
     k1k2JPDF[iBin].resize(nBin);
     k1k2FMJPDF[iBin].resize(nBin);
     kEsJPDF[iBin].resize(nBin);
+    stretchsJPDF[iBin].resize(nBin);
+    stretchIndsJPDF[iBin].resize(nBin);
     for (int j = 0; j < nBin; j++) {
       ksJPDF[iBin][j] = 0.0;
       EsJPDF[iBin][j] = 0.0;
       k1k2JPDF[iBin][j] = 0.0;
       k1k2FMJPDF[iBin][j] = 0.0;
+      stretchsJPDF[iBin][j] = 0.0;
+      stretchIndsJPDF[iBin][j] = 0.0;
       kEsJPDF[iBin][j].resize(nBin);
       for (int k = 0; k<nBin; k++) {
 	kEsJPDF[iBin][j][k] = 0.0;
@@ -319,19 +330,48 @@ main (int   argc,
 #pragma omp parallel
 {
 #endif
-  Real curvatureLoc, strainLoc, speedLoc, thermalThicknessLoc,maxModGradT, avgMk,avgGk,det,k1,k2, contr,areaLoc,stretchLoc;
-  int curvatureBinIdx, strainBinIdx, speedBinIdx, stretchBinIdx ,k1BinIdx, k2BinIdx, zone, zoneIdx;
+  Real curvatureLoc, strainLoc, speedLoc, thermalThicknessLoc,maxModGradT, avgMk,avgGk,det,k1,k2, contr,areaLoc,stretchLoc, stretchIndLoc;
+  int curvatureBinIdx, strainBinIdx, speedBinIdx, stretchBinIdx, stretchIndBinIdx ,k1BinIdx, k2BinIdx, zone, zoneIdx;
   int3 localSIdx;
   Vector<Vector<Real>> localStreamData;
   localStreamData.resize(AMREX_SPACEDIM);
   
-  Vector<Vector<Real>> ksJPDF_file(ksJPDF);
-  Vector<Vector<Real>> EsJPDF_file(EsJPDF); 
-  Vector<Vector<Real>> k1k2JPDF_file(k1k2JPDF);
-  Vector<Vector<Real>> k1k2FMJPDF_file(k1k2FMJPDF);
-  Vector<Vector<Vector<Real>>> kEsJPDF_file(kEsJPDF);
-  Vector<Real> fractionalContribution_file(fractionalContribution);
+  Vector<Vector<Real>> ksJPDF_file(nBin);
+  Vector<Vector<Real>> EsJPDF_file(nBin); 
+  Vector<Vector<Real>> k1k2JPDF_file(nBin);
+  Vector<Vector<Real>> k1k2FMJPDF_file(nBin);
+  Vector<Vector<Vector<Real>>> kEsJPDF_file(nBin);
+  Vector<Vector<Real>> stretchsJPDF_file(nBin);
+  Vector<Vector<Real>> stretchIndsJPDF_file(nBin);
+  Vector<Real> fractionalContribution_file(12);
 
+  
+  for (int iBin = 0; iBin < nBin; iBin++) {
+    
+    ksJPDF_file[iBin].resize(nBin);
+    EsJPDF_file[iBin].resize(nBin);
+    k1k2JPDF_file[iBin].resize(nBin);
+    k1k2FMJPDF_file[iBin].resize(nBin);
+    kEsJPDF_file[iBin].resize(nBin);
+    stretchsJPDF_file[iBin].resize(nBin);
+    stretchIndsJPDF_file[iBin].resize(nBin);
+    for (int j = 0; j < nBin; j++) {
+      ksJPDF_file[iBin][j] = 0.0;
+      EsJPDF_file[iBin][j] = 0.0;
+      k1k2JPDF_file[iBin][j] = 0.0;
+      k1k2FMJPDF_file[iBin][j] = 0.0;
+      stretchsJPDF_file[iBin][j] = 0.0;
+      stretchIndsJPDF_file[iBin][j] = 0.0;
+      kEsJPDF_file[iBin][j].resize(nBin);
+      for (int k = 0; k<nBin; k++) {
+	kEsJPDF_file[iBin][j][k] = 0.0;
+      }
+    }
+  }
+  for (int i=0;i<12;i++) {
+    fractionalContribution_file[i] = 0.0;
+  }
+  
 #ifdef _OPENMP
 #pragma omp for schedule(static) reduction(+: filess,filels) private(iElt,d)
 #endif
@@ -342,15 +382,22 @@ main (int   argc,
       }
       areaLoc = eltArea[iElt];
       strainLoc = calcAvgVal(strainIdx,nPtsOnStream,localStreamData);
-      strainBinIdx = (int)((strainLoc-minE)/de);
+      strainBinIdx = floor((strainLoc-minE)/de);
       fileEbar += strainLoc*areaLoc/surfaceArea;
       
       curvatureLoc = calcAvgVal(curvatureIdx,nPtsOnStream,localStreamData);
-      curvatureBinIdx = (int)((curvatureLoc-minK)/dk);
-      
+      curvatureBinIdx = floor((curvatureLoc-minK)/dk);
+
+      stretchLoc = M*(curvatureLoc*ls_input + (strainLoc-Ebar_input)*tau_input);
+      stretchBinIdx = floor((stretchLoc-minStretch)/dS);
+      stretchIndLoc = M1*curvatureLoc*ls_input + M2*(strainLoc-Ebar_input)*tau_input;
+      stretchIndBinIdx = floor((stretchIndLoc-minStretch)/dS);
       speedLoc = calcIntegral(FCRIdx,nPtsOnStream,localStreamData,areaLoc);
       speedLoc /= rhoY;
-      speedBinIdx = (int)((speedLoc-minS)/ds);
+      if (std::isnan(speedLoc)) {
+	continue;
+      }
+      speedBinIdx = floor((speedLoc-minS)/ds);
       filess += speedLoc*areaLoc/surfaceArea;
       
       
@@ -393,6 +440,12 @@ main (int   argc,
 	if (strainBinIdx >= 0 && strainBinIdx < nBin) {
 	  EsJPDF_file[strainBinIdx][speedBinIdx] += contr;
 	}
+	if (stretchBinIdx >= 0 && stretchBinIdx < nBin) {
+	  stretchsJPDF_file[stretchBinIdx][speedBinIdx] += contr; 
+	}
+	if (stretchIndBinIdx >= 0 && stretchIndBinIdx < nBin) {
+	  stretchIndsJPDF_file[stretchIndBinIdx][speedBinIdx] += contr;
+	}
       }
       if (k1BinIdx >= 0 && k1BinIdx < nBin && k2BinIdx >=0 && k2BinIdx < nBin) {
 	k1k2JPDF_file[k1BinIdx][k2BinIdx] += contr;
@@ -411,13 +464,17 @@ main (int   argc,
 	  EsJPDF[iBin1][iBin2] += EsJPDF_file[iBin1][iBin2]/(Real)nFiles;
 	  k1k2JPDF[iBin1][iBin2] += k1k2JPDF_file[iBin1][iBin2]/(Real)nFiles;
 	  k1k2FMJPDF[iBin1][iBin2] += k1k2FMJPDF_file[iBin1][iBin2]/(Real)nFiles;
+	  stretchsJPDF[iBin1][iBin2] += stretchsJPDF_file[iBin1][iBin2]/(Real)nFiles;
+	  stretchIndsJPDF[iBin1][iBin2] += stretchIndsJPDF_file[iBin1][iBin2]/(Real)nFiles;
 	  for (int iBin3 = 0; iBin3 < nBin; iBin3++) {
 	    kEsJPDF[iBin1][iBin2][iBin3] += kEsJPDF_file[iBin1][iBin2][iBin3]/(Real)nFiles;
 	  }
 	}
       }
       for (int i = 0; i<12; i++) {
-	fractionalContribution[i] += fractionalContribution_file[i]/(Real)nFiles;
+	if (!std::isnan(fractionalContribution_file[i])) {
+	  fractionalContribution[i] += fractionalContribution_file[i]/(Real)nFiles;
+	}
       }
 #ifdef _OPENMP      
     }
@@ -439,10 +496,12 @@ main (int   argc,
   characteristics[0] = ls;
   characteristics[1] = ss;
   characteristics[2] = Ebar*ls/ss;
-  //checkUnity1(fractionalContribution,6);
+  checkUnity1(fractionalContribution,6);
   checkUnity2(ksJPDF,nBin,nBin);
   checkUnity2(EsJPDF,nBin,nBin);
   checkUnity2(k1k2JPDF,nBin,nBin);
+  checkUnity2(stretchsJPDF,nBin,nBin);
+  checkUnity2(stretchIndsJPDF,nBin,nBin);
   //writeSingleArray(characteristics,3,"properties/characteristics");
   writeSingleArray(sBins,nBin,"JPDF/s.dat");
   writeSingleArray(EBins,nBin,"JPDF/e.dat");
@@ -453,6 +512,8 @@ main (int   argc,
   writeDoubleArray(EsJPDF,nBin,nBin,"JPDF/EsJPDF.dat");
   writeDoubleArray(k1k2JPDF,nBin,nBin,"JPDF/k1k2JPDF.dat");
   writeDoubleArray(k1k2FMJPDF,nBin,nBin,"JPDF/k1k2FMJPDF.dat");
+  writeDoubleArray(stretchsJPDF,nBin,nBin,"JPDF/stretchsJPDF.dat");
+  writeDoubleArray(stretchIndsJPDF,nBin,nBin,"JPDF/stretchIndsJPDF.dat");
   for (int n = 0; n<nBin; n++) {
     std::string filename = "JPDF/KES/JPDF"+std::to_string(n)+".dat";
     writeDoubleArray(kEsJPDF[n],nBin,nBin,filename);
