@@ -656,7 +656,8 @@ StreamParticleContainer::
 InspectParticles (const int nStreamPairs)
 {
   BL_PROFILE("StreamParticleContainer::InspectParticles");
-
+  return;
+  
   SetParticleLocation(0,1);
   
   int IOProc = ParallelDescriptor::IOProcessor();
