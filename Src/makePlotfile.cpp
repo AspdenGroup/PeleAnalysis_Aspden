@@ -101,15 +101,20 @@ int main(int argc, char *argv[])
 
   // assign a physical size
   Real probLo[3];
+  int calcz;
   if (pp.countval("probLo")==3) {
     for (int i=0; i<3; i++) {
       pp.get("probLo",probLo[i],i);
     }
+    calcz = 0; 
+  } else if (pp.countval("probLo") == 2) {
+    for (int i=0; i<2; i++) {
+      pp.get("probLo",probLo[i],i);
+    }
+    calcz = 1;
   } else {
     amrex::Error("Need 3 values for probLo");
   }
-  if (verbose) std::cout << "probLo = "
-			 << probLo[0] << " " << probLo[1] << " " << probLo[2] << std::endl;
   
   Real probHi[3];
   if (pp.countval("probHi")==3) {
@@ -119,14 +124,26 @@ int main(int argc, char *argv[])
   } else {
     amrex::Error("Need 3 values for probHi");
   }
+  Vector<int> is_per(AMREX_SPACEDIM,0); //hard code to no periodicity for the minute
+  Real dx[3];
+  if (calcz) {
+    for (int i=0; i<2; i++) {
+      dx[i] = (probHi[i]-probLo[i])/(Real)nx[i];
+    }
+    dx[2] = dx[0];
+    probLo[2] = -dx[2]*nx[2];
+  } else {
+    for (int i=0; i<3; i++) {
+      dx[i] = (probHi[i]-probLo[i])/(Real)nx[i];
+    }
+  }
+  if (verbose) std::cout << "probLo = "
+			 << probLo[0] << " " << probLo[1] << " " << probLo[2] << std::endl;
   if (verbose) std::cout << "probHi = "
 			 << probHi[0] << " " << probHi[1] << " " << probHi[2] << std::endl;
   RealBox rb(probLo,probHi); // make real box for geometry
-  Vector<int> is_per(AMREX_SPACEDIM,0); //hard code to no periodicity for the minute
-  Real dx[3];
-  for (int i=0; i<3; i++) {
-    dx[i] = (probHi[i]-probLo[i])/(Real)nx[i];
-  }
+  
+
   if (verbose) std::cout << "dx = "
 			 << dx[0] << " " << dx[1] << " " << dx[2] << std::endl;
 
@@ -189,8 +206,8 @@ int main(int argc, char *argv[])
     FArrayBox& myFab = (*mf)[mfi];
     
     // load data
-    std::cout << "iFile = " << iFile << ": " << infile[iFile].c_str() << std::endl;
-    ifs.open(infile[iFile].c_str());
+    std::cout << "iFile = " << iFile << ": " << infile[nFiles-iFile-1].c_str() << std::endl;
+    ifs.open(infile[nFiles-iFile-1].c_str());
     fab.readFrom(ifs);
     ifs.close();
     IntVect shift = {0,0,iFile-fab.box().smallEnd(2)};
