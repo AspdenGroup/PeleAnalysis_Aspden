@@ -7,8 +7,8 @@ using std::endl;
 #include <AMReX_ParmParse.H>
 #include <AMReX_MultiFab.H>
 #include <AMReX_DataServices.H>
-#include <WritePlotFile.H>
-#include <AppendToPlotFile.H>
+//#include <WritePlotFile.H>
+//#include <AppendToPlotFile.H>
 
 using namespace amrex;
 
@@ -207,7 +207,7 @@ main (int   argc,
     // Intersect variable number (must come after stoichiometry)
     int isVar=nVars;
 
-    Vector<string> whichVar(nVars);
+    Vector<std::string> whichVar(nVars);
     if (verbose)
         std::cout << "Variable list:" << std::endl;
     // Read in variable list - adjusting for stoichiometry
@@ -220,7 +220,7 @@ main (int   argc,
         whichVar[sVar] = "Stoichiometry";
 
     // Copy the names of the variable for output filenames, replacing dodgy characters
-    Vector<string> whichVarOut(nVars);
+    Vector<std::string> whichVarOut(nVars);
     for (int iVar=0; iVar<nVars; iVar++) {
         whichVarOut[iVar] = ProtectSlashes(whichVar[iVar]);
         if (verbose)
@@ -363,7 +363,7 @@ main (int   argc,
             mf[iLevel]->setVal(1.,isVar,1);
 
             // Load the data (make a copy of whichVar to make sure it's the same size as destFills)
-            Vector<string> loadWhichVar(lVars);
+            Vector<std::string> loadWhichVar(lVars);
             for (int v=0; v<lVars; v++)
                 loadWhichVar[v] = whichVar[v];
             amrData.FillVar(*mf[iLevel], iLevel, loadWhichVar, destFills);
@@ -490,11 +490,11 @@ main (int   argc,
           
                                         if (contribute==1) {
                                             int v1i = (int)(nBins*(v1Ptr[cell]-vMin[var1])/(vMax[var1]-vMin[var1]));
-                                            if (v1i<0)      { v1l++; v1i=0; }
-                                            if (v1i>=nBins) { v1g++; v1i=nBins-1; }
+                                            if (v1i<0)      { v1l++; continue;}//v1i=0; }
+					    if (v1i>=nBins) { v1g++; continue;}//v1i=nBins-1; }
                                             int v2i = (int)(nBins*(v2Ptr[cell]-vMin[var2])/(vMax[var2]-vMin[var2]));
-                                            if (v2i<0)      { v2l++; v2i=0; }
-                                            if (v2i>=nBins) { v2g++; v2i=nBins-1; }
+                                            if (v2i<0)      { v2l++; continue;}//v2i=0; }
+                                            if (v2i>=nBins) { v2g++; continue;}//v2i=nBins-1; }
                                             bin[v1i*nBins+v2i]+=Vol;
                                             binX1[v1i*nBins+v2i]+=Vol*v1Ptr[cell];
                                             binX2[v1i*nBins+v2i]+=Vol*v2Ptr[cell];
@@ -731,7 +731,7 @@ main (int   argc,
                 } // var2
             } // var1
         } // IOProcessor
- 
+	/*
         if (output_plotfile) {
             // Let's write the data as a "plotfile"
             //
@@ -870,7 +870,7 @@ main (int   argc,
             TheFullPath += BaseName;
             VisMF::Write(omf,TheFullPath);
         } // Output plotfile
- 
+	*/
     } // iPlot
     
     

@@ -58,6 +58,7 @@ main (int   argc,
 
     std::string plotFileName; pp.get("infile",plotFileName);
     std::string fuelName="H2"; pp.query("fuelName",fuelName);
+    
     DataServices::SetBatchMode();
     Amrvis::FileType fileType(Amrvis::NEWPLT);
 
@@ -69,15 +70,22 @@ main (int   argc,
     AmrData& amrData = dataServices.AmrDataRef();
 
     bool initNormalise=false;
+    int initQuery = 1; pp.query("initNormalise",initQuery); 
 
     DataServices dataServicesInit("plt00000", fileType);
     if (!dataServicesInit.AmrDataOk()) {
-      std::cout << "Cannot find initial condition - normalising using current plotfile" << std::endl;
+      if (ParallelDescriptor::IOProcessor())
+	std::cout << "Cannot find initial condition - normalising using current plotfile" << std::endl;
+    } else if (initQuery == 0){
+      if (ParallelDescriptor::IOProcessor())
+	std::cout << "Manually set to not normalise" << std::endl;
     } else {
       if (ParallelDescriptor::IOProcessor())
 	std::cout << "Normalising using initial condition" << std::endl;
       initNormalise=true;
     }
+
+    
 
     AmrData& initAmrData = dataServicesInit.AmrDataRef();
     

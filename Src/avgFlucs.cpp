@@ -20,14 +20,14 @@ print_usage (int,
     std::cerr << argv[0] << " infile=<name> outfile=<> [options] \n\tOptions:\n";
     exit(1);
 }
-
+/*
 std::string
 getFileRoot(const std::string& infile)
 {
     vector<std::string> tokens = Tokenize(infile,std::string("/"));
     return tokens[tokens.size()-1];
 }
-
+*/
 int
 main (int   argc,
       char* argv[])
@@ -105,7 +105,10 @@ main (int   argc,
     int finestLevel = amrData0.FinestLevel();
     //finest level to go down to
     pp.query("finestLevel",finestLevel);
- 
+    
+    Vector<Real> probLo=amrData0.ProbLo();
+    Vector<Real> probHi=amrData0.ProbHi();
+    Real dx = amrData0.DxLevel()[0][0]; //coarse dx
     Print() << "... averaging to resolution of level " << finestLevel << std::endl;
     // find probDomain at level we want
     Box probDomain0 = amrData0.ProbDomain()[finestLevel];
@@ -154,9 +157,9 @@ main (int   argc,
       fileData.reset(new MultiFab(newba,DistributionMapping(newba),nCompIn,0));
       Print() << "... loading " << infiles[iFile] << std::endl;
       // load data
-      amrData.FillVar(*fileData,finestLevel,amrData.PlotVarNames(),comps);
+      amrData.FillVar(*fileData,finestLevel,vars,destfillcomps);
       for (int i = 0; i < nCompIn; i++) {
-	  amrData.FlushGrids(comps[i]);
+	  amrData.FlushGrids(destfillcomps[i]);
       }
       
       std::unique_ptr<MultiFab> tmpMF;
@@ -167,8 +170,11 @@ main (int   argc,
 	Array4<Real> tmpArray = tmpMF->array(mfi);
 	AMREX_PARALLEL_FOR_3D (bx, i, j, k,
 			       {
+				 Real x = probLo[0]+(i+0.5)*dx;
+				 Real y = probLo[1]+(j+0.5)*dx;
+				 Real ur = (x*fileArray(i,j,k,1) + y*fileArray(i,j,k,2))/std::sqrt(x*x + y*y);
 				 tmpArray(i,j,k,0) = fileArray(i,j,k,0); //density
-				 tmpArray(i,j,k,1) = fileArray(i,j,k,0)*std::sqrt(fileArray(i,j,k,1)*fileArray(i,j,k,1) + fileArray(i,j,k,2)*fileArray(i,j,k,2)); //rhour
+				 tmpArray(i,j,k,1) = fileArray(i,j,k,0)*ur; //rhour
 				 for (int n = 0; n<4; n++) {
 				   tmpArray(i,j,k,2+n) = fileArray(i,j,k,0)*fileArray(i,j,k,3+n); //rhouz rhoYs
 				 }
@@ -219,7 +225,7 @@ main (int   argc,
 			     {
 			       flucArray(i,j,k,0) = avgArray(i,j,k,0)*(avgArray(i,j,k,9)-avgArray(i,j,k,2)*avgArray(i,j,k,2)); //rhouzuz
 			       flucArray(i,j,k,1) = avgArray(i,j,k,0)*(avgArray(i,j,k,8)-avgArray(i,j,k,2)*avgArray(i,j,k,1)); //rhouzur
-			       flucArray(i,j,k,2) = avgArray(i,k,k,0)*(avgArray(i,j,k,7)-avgArray(i,j,k,1)*avgArray(i,j,k,1)); //rhourur
+			       flucArray(i,j,k,2) = avgArray(i,j,k,0)*(avgArray(i,j,k,7)-avgArray(i,j,k,1)*avgArray(i,j,k,1)); //rhourur
 			       flucArray(i,j,k,3) = avgArray(i,j,k,0)*(avgArray(i,j,k,10)-avgArray(i,j,k,2)*avgArray(i,j,k,3)); //rhouzYH2
 			       flucArray(i,j,k,4) = avgArray(i,j,k,0)*(avgArray(i,j,k,11)-avgArray(i,j,k,2)*avgArray(i,j,k,4)); //rhouzYO2
 			       flucArray(i,j,k,5) = avgArray(i,j,k,0)*(avgArray(i,j,k,12)-avgArray(i,j,k,2)*avgArray(i,j,k,5)); //rhouzYN2

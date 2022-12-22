@@ -1,3 +1,4 @@
+
 AMREX_HOME = ../amrex
 DEBUG	      = FALSE
 DIM	      = 3
@@ -6,15 +7,14 @@ PRECISION     = DOUBLE
 USE_MPI       = TRUE
 USE_OMP       = FALSE
 
-EBASE         = combinePlts
-EBASE         = isosurface
-EBASE         = partStream
+#EBASE         = combinePlts
+#EBASE         = isosurface
+#EBASE         = partStream
 #EBASE         = stream2plt
 #EBASE         = streamScatter
 #EBASE         = streamSub
-#EBASE         = streamBinTubeStats_TLH
+#EBASE         = streamTubeStats
 #EBASE         = curvature
-#EBASE         = surfMEFtoDATnorm
 #EBASE         = surfMEFtoDAT
 #EBASE         = surfMEFtoDATbasic
 #EBASE         = surfDATtoMEF
@@ -22,48 +22,17 @@ EBASE         = partStream
 #EBASE         = subPlt
 #EBASE         = conditionalMean
 #EBASE         = jpdf
-#EBASE         = plotProg
+EBASE         = plotProg
 #EBASE         = plotPhi
-#EBASE         = decimate
+#EBASE         = decimate.
 #EBASE         = areaMEF   
-#EBASE		= deltaCheck
-#EBASE		= avgPlots
-#EBASE		= surfStats
-#EBASE		= makePlotfile
-#EBASE		= addDummies
-#EBASE		= diffSlice
-#EBASE		= centerline
-#EBASE		= plotZC_noTerms
-#EBASE		= flameindex
-#EBASE		= trimPlotfile
-#EBASE		= jpdf
-#EBASE		= machnumber
-#EBASE		= dissipationrateZ
-#EBASE		= slicescatter
-#EBASE		= avgFlucs
-#EBASE		= avgPlots
-#EBASE		= plotZC_noTerms
-#EBASE		= boxTagging
-#EBASE		= straintensor
-#EBASE		= microscales
-#EBASE		= diffusivefluxes
-#EBASE		= lineOfSight
 NEEDS_f90_SRC = FALSE
 
 #EBASE         = grad
 #EBASE         = sampleStreamlines
 #EBASE         = stream
-#EBASE         = CORIstream
-#EBASE		= plotZC
-#EBASE		= avgTheta
+#EBASE          = CORIstream
 #NEEDS_f90_SRC = TRUE
-
-#EBASE         = streamBinTubeStats
-#NEEDS_f90_SRC = FALSE
-#USE_MPI       = FALSE
-
-#USE_MPI       = FALSE
-#DEBUG         = TRUE
 
 include $(AMREX_HOME)/Tools/GNUMake/Make.defs
 
@@ -71,10 +40,9 @@ CEXE_sources += $(EBASE).cpp
 ifeq ($(NEEDS_f90_SRC),TRUE)
   f90EXE_sources += $(EBASE)_nd.f90
 endif
-
-CEXE_headers += StreamPC.H
+CEXE_headers += StreamData.H    StreamPC.H
 ifeq ($(EBASE),partStream)
-  CEXE_sources += StreamPC.cpp
+  CEXE_sources += StreamData.cpp  StreamPC.cpp
 endif
 
 INCLUDE_LOCATIONS += .
@@ -87,8 +55,8 @@ include $(Ppack)
 INCLUDE_LOCATIONS += $(Blocs)
 VPATH_LOCATIONS   += $(Blocs)
 
-#CEXE_sources += AppendToPlotFile.cpp WritePlotFile.cpp
-#CEXE_headers += AppendToPlotFile.H   WritePlotFile.H
+CEXE_sources += AppendToPlotFile.cpp WritePlotFile.cpp
+CEXE_headers += AppendToPlotFile.H   WritePlotFile.cpp
 INCLUDE_LOCATIONS += $(AMREX_HOME)/Tools/C_util
 VPATH_LOCATIONS += $(AMREX_HOME)/Tools/C_util
 

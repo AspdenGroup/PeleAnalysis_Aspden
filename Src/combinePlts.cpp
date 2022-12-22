@@ -4,8 +4,8 @@
 #include <AMReX_ParmParse.H>
 #include <AMReX_MultiFab.H>
 #include <AMReX_DataServices.H>
-#include <WritePlotFile.H>
-#include <AppendToPlotFile.H>
+#include <AMReX_MultiFabUtil.H>
+#include <AMReX_PlotFileUtil.H>
 
 using namespace amrex;
 
@@ -25,7 +25,7 @@ print_usage (int,
 std::string
 getFileRoot(const std::string& infile)
 {
-    vector<std::string> tokens = Tokenize(infile,std::string("/"));
+  std::vector<std::string> tokens = Tokenize(infile,std::string("/"));
     return tokens[tokens.size()-1];
 }
 
@@ -120,11 +120,26 @@ main (int   argc,
     BL_ASSERT(Nlev == amrDataR.FinestLevel() + 1);
 
     const int nComp = compsL.size() + compsR.size();
+    
+    Vector<int> is_per(AMREX_SPACEDIM,1);
+    pp.queryarr("is_per",is_per,0,AMREX_SPACEDIM);
+    Print() << "Periodicity assumed for this case: ";
+    for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+        Print() << is_per[idim] << " ";
+    }
+    
+    RealBox rb(&(amrDataL.ProbLo()[0]), 
+               &(amrDataL.ProbHi()[0]));
+
     Vector<MultiFab*> fileData(Nlev);
+    Vector<Geometry> geoms(Nlev);
+    int coord = 0;
+
     for (int lev=0; lev<Nlev; ++lev)
     {
         BL_ASSERT(amrDataL.boxArray(lev) == amrDataR.boxArray(lev));
         const DistributionMapping dm(amrDataL.boxArray(lev));
+	geoms[lev] = Geometry(amrDataL.ProbDomain()[lev],&rb,coord,&(is_per[0]));
         fileData[lev] = new MultiFab(amrDataL.boxArray(lev),dm,nComp,0);
     }
     if (ParallelDescriptor::IOProcessor())
@@ -173,9 +188,13 @@ main (int   argc,
         names[i] = amrDataL.PlotVarNames()[compsL[i]];
     for (int i=0; i<compsR.size(); ++i)
         names[compsL.size()+i] = amrDataR.PlotVarNames()[compsR[i]];
-    
-    bool verb = false;
-    WritePlotFile(fileData,amrDataL,outfile,verb,names);
+
+    Vector<int> isteps(Nlev, 0);
+    Vector<IntVect> refRatios(Nlev-1,{AMREX_D_DECL(2, 2, 2)});
+    amrex::WriteMultiLevelPlotfile(outfile, Nlev, GetVecOfConstPtrs(fileData), names,
+                                   geoms, 0.0, isteps, refRatios);
+
+    //WritePlotFile(fileData,amrDataL,outfile,verb,names);
     }
     amrex::Finalize();
     return 0;

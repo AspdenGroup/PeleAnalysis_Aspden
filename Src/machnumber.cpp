@@ -7,8 +7,8 @@
 #include <AMReX_DataServices.H>
 #include <AMReX_BCRec.H>
 #include <AMReX_Interpolater.H>
-//#include <WritePlotFile.H>
-
+#include <AMReX_MultiFabUtil.H>
+#include <AMReX_PlotFileUtil.H>
 #include <AMReX_BLFort.H>
 
 using namespace amrex;
@@ -28,7 +28,7 @@ print_usage (int,
 std::string
 getFileRoot(const std::string& infile)
 {
-  vector<std::string> tokens = Tokenize(infile,std::string("/"));
+  std::vector<std::string> tokens = Tokenize(infile,std::string("/"));
   return tokens[tokens.size()-1];
 }
 
@@ -50,10 +50,17 @@ main (int   argc,
       AmrData::SetVerbose(false);
 
     std::string plotFileName; pp.get("infile",plotFileName);
-    Vector<std::string> varNames;
-    int nVar= pp.countval("vars");
-    varNames.resize(nVar);
-    pp.getarr("vars",varNames,0,nVar);
+    int nVar = 2+AMREX_SPACEDIM;
+    Vector<std::string> varNames(nVar);
+    varNames[0] = "RhoRT";
+    varNames[1] = "density";
+    varNames[2] = "x_velocity";
+    varNames[3] = "y_velocity";
+#if AMREX_SPACEDIM==3
+    varNames[4] = "z_velocity";
+#endif
+    Real gamma=1.4;
+    pp.query("gamma",gamma);
     DataServices::SetBatchMode();
     Amrvis::FileType fileType(Amrvis::NEWPLT);
 
@@ -67,14 +74,24 @@ main (int   argc,
     int finestLevel = amrData.FinestLevel();
     pp.query("finestLevel",finestLevel);
     int Nlev = finestLevel + 1;
-
     Vector<int> idVin(nVar);
     for (int i = 0; i<nVar; ++i) {
       idVin[i] = -1;
     } 
     
     const Vector<std::string>& plotVarNames = amrData.PlotVarNames();
+    RealBox rb(&(amrData.ProbLo()[0]), 
+               &(amrData.ProbHi()[0]));
+    int coord = 0;
+    Vector<int> is_per(AMREX_SPACEDIM,1);
+    pp.queryarr("is_per",is_per,0,AMREX_SPACEDIM);
+    Print() << "Periodicity assumed for this case: ";
+    for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+        Print() << is_per[idim] << " ";
+    }
+    Print() << "\n";
     
+
     for (int i=0; i<plotVarNames.size(); ++i)
     {
       for (int j = 0; j<nVar; ++j) {	
@@ -88,27 +105,28 @@ main (int   argc,
       }
     }
     const int nCompIn  = nVar;
-    const int nCompOut = nVar;
-    Vector<std::string> outNames(nCompOut);
+    const int nCompOut = 1;
+    Vector<std::string> outNames(1);
     Vector<std::string> inNames(nCompIn);
     Vector<int> destFillComps(nCompIn);
     
     for (int i = 0; i<nVar; i++) {
       destFillComps[i] = i;
       inNames[i] = varNames[i];
-      outNames[i] = "maxDelta_"+varNames[i];
     }
+    outNames[0] = "machNumber";
     
-    Vector<std::unique_ptr<MultiFab>> outdata(Nlev);
+    Vector<MultiFab> outdata(Nlev);
+    Vector<Geometry> geoms(Nlev);
     const int nGrow = 1;
-    //int b[3] = {1, 1, 1};
     
     for (int lev=0; lev<Nlev; ++lev)
     {
       const BoxArray ba = amrData.boxArray(lev);
       const DistributionMapping dm(ba);
-      outdata[lev].reset(new MultiFab(ba,dm,nCompOut,nGrow));
+      outdata[lev].define(ba,dm,nCompOut,nGrow);
       MultiFab indata(ba,dm,nCompIn,nGrow);
+      geoms[lev] = Geometry(amrData.ProbDomain()[lev],&rb,coord,&(is_per[0]));
 
       Print() << "Reading data for level " << lev << std::endl;
       amrData.FillVar(indata,lev,inNames,destFillComps); //Problem
@@ -118,29 +136,27 @@ main (int   argc,
 	
         const Box& bx = mfi.tilebox();
 	Array4<Real> const& varsIn  = indata.array(mfi);
-        Array4<Real> const& varsOut = (*outdata[lev]).array(mfi);
+        Array4<Real> const& varsOut = outdata[lev].array(mfi);
 
         AMREX_PARALLEL_FOR_3D ( bx, i, j, k,
         {
-	  for (int n=0;n<nVar; n++) {
-	    Real deltaxp1 = std::abs(varsIn(i+1,j,k,n)-varsIn(i,j,k,n));
-	    Real deltaxm1 = std::abs(varsIn(i,j,k,n)-varsIn(i-1,j,k,n));
-	    Real deltayp1 = std::abs(varsIn(i,j+1,k,n)-varsIn(i,j,k,n));
-	    Real deltaym1 = std::abs(varsIn(i,j,k,n)-varsIn(i,j-1,k,n));
-	    Real deltazp1 = std::abs(varsIn(i,j,k+1,n)-varsIn(i,j,k,n));
-	    Real deltazm1 = std::abs(varsIn(i,j,k,n)-varsIn(i,j,k-1,n));
-	    varsOut(i,j,k,n) = std::max(std::max(deltaxp1,std::max(deltaxm1,deltayp1)),std::max(deltaym1,std::max(deltazp1,deltazm1)));
-	  } 
-        });
+	  Real maxVel = 0;
+	  for (int d = 0; d<AMREX_SPACEDIM; d++) {
+	    maxVel += varsIn(i,j,k,2+d)*varsIn(i,j,k,2+d);
+	  }
+	  maxVel = std::sqrt(maxVel);
+	  varsOut(i,j,k,0) = maxVel/std::sqrt(gamma*varsIn(i,j,k,0)/varsIn(i,j,k,1));
+	});
       }
 
       Print() << "Derive finished for level " << lev << std::endl;
     }
 
-    std::string outfile(getFileRoot(plotFileName) + "_delta");
+    std::string outfile(getFileRoot(plotFileName) + "_mach");
     Print() << "Writing new data to " << outfile << std::endl;
-    const bool verb = true;
-    WritePlotFile(GetVecOfPtrs(outdata),amrData,outfile,verb,outNames);
+    Vector<int> isteps(Nlev, 0);
+    Vector<IntVect> refRatios(Nlev-1,{AMREX_D_DECL(2, 2, 2)});
+    WriteMultiLevelPlotfile(outfile,Nlev,GetVecOfConstPtrs(outdata),outNames,geoms,0.0,isteps,refRatios);
   }
   Finalize();
   return 0;

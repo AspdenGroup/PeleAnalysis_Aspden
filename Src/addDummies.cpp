@@ -124,7 +124,13 @@ main (int   argc,
         AMREX_PARALLEL_FOR_3D ( bx, i, j, k,
         {
 	  for (int n = 0; n<nCompIn; n++) {
+	    /*if(plotVarNames[n].find("Y(") != string::npos) {
+	      outarr(i,j,k,n) = std::max(inarr(i,j,k,n),0.0);
+	    } else if ( plotVarNames[n].find("z_velocity") != string::npos) {
+	      outarr(i,j,k,n) = std::max(inarr(i,j,k,n),1.0);
+	      } else {*/
 	    outarr(i,j,k,n) = inarr(i,j,k,n);
+	    //}
 	  }
 	  for (int n= 0; n<nDummyVars;n++) {
 	    outarr(i,j,k,n+nCompIn) = dummyVals[n];

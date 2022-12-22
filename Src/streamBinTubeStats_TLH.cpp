@@ -38,8 +38,6 @@ main (int   argc,
   
   std::string fuelName="H2";
   pp.query("fuelName",fuelName);
-  Real percOfMean;
-  pp.get("percOfMean",percOfMean);
   // declare size and data holders
   int nStreams, nElts, nPtsOnStream, nComps;
   Vector<std::string> variableNames;
@@ -106,7 +104,7 @@ main (int   argc,
   Vector<Vector<int>> derIdxIn(nDerFlag); //derIn
   Vector<Vector<int>> derIdxOut(nDerFlag); //derOut
   int nDerOut = 0;
-  Real deltaT,rhoY,pkzFF; 
+  Real deltaT,rhoY,pkzFF,percOfMean;
   if (nDerFlag>0) pp.getarr("derComps",derCompsIn);
   for (int iDerFlag=0; iDerFlag<nDerFlag; iDerFlag++) {
     if (derCompsIn[iDerFlag]=="flameThickness") {
@@ -124,6 +122,7 @@ main (int   argc,
       nDerOut += 1;
     }
     if (derCompsIn[iDerFlag]=="flameSpeed") {
+      pp.get("percOfMean",percOfMean);
       pp.get("rhoY",rhoY);
       std::string FCRVar=fuelName+"_ConsumptionRate";
       pp.query("FCRVar",FCRVar);
@@ -545,12 +544,11 @@ main (int   argc,
 	}
       }
     }
-#ifdef _OPENMP  
+#ifdef _OPENMP
 #pragma omp critical
   {
 #endif
     if (dumpPKZstreams) {
-      
       for (int z=0;z<6;z++) {
 	areaZoneStreams[z] += areaZoneStreams_local[z];
 	lsStreams[z] += lsStreams_local[z];
@@ -561,10 +559,11 @@ main (int   argc,
 	}
       }
     }
-#ifdef _OPENMP          
+#ifdef _OPENMP
   }
   }
 #endif
+
   
   //dump characteristic values for this file
   std::string filename=infile+"/characteristics.dat";
@@ -984,7 +983,7 @@ writeSurfaceBasic(std::string infile,
 		  int& nInt,  Vector<std::string>& intComps, Vector<Vector<Real>>& surfInt,
 		  int& nDer,  Vector<std::string>& derComps, Vector<Vector<Real>>& surfDer)
 {
-  std::string filename=infile+"_binVolInt.dat";
+  std::string filename=infile+"_binVolInt_basic.dat";
 
   std::ofstream os(filename.c_str(),std::ios::out);
 

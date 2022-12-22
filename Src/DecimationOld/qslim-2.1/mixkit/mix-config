@@ -1,0 +1,10 @@
+MIX_ROOT = /home/e305/e305/thowarth/PeleAnalysis_Aspden/Src/Decimation/qslim-2.1/mixkit
+LIBMIX = -lmix -lgfx
+
+include $(MIX_ROOT)/../libgfx/gfx-config
+
+CFLAGS += -I$(MIX_ROOT)/src
+CFLAGS += -I/home/e305/e305/thowarth/usr/include
+CXXFLAGS += -I$(MIX_ROOT)/src
+CXXFLAGS += -I/home/e305/e305/thowarth/usr/include
+LDFLAGS += -L$(MIX_ROOT)/src

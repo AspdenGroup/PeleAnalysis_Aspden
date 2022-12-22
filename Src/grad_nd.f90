@@ -28,28 +28,28 @@ contains
     enddo
 
   end subroutine pushvtog
-  
-  subroutine pushvtog2d(lo, hi, dlo, dhi, U, U_lo, U_hi, nc) bind(c,name='pushvtog2d')
-    implicit none
-    integer, intent(in) :: nc, lo(2),  hi(2), dlo(2), dhi(2)
-    integer, intent(in) :: U_lo(2), U_hi(2)
-    real(amrex_real), intent(inout) :: U(U_lo(1):U_hi(1),U_lo(2):U_hi(2),nc)
+!  
+!  subroutine pushvtog2d(lo, hi, dlo, dhi, U, U_lo, U_hi, nc) bind(c,name='pushvtog2d')
+!    implicit none
+!    integer, intent(in) :: nc, lo(2),  hi(2), dlo(2), dhi(2)
+!    integer, intent(in) :: U_lo(2), U_hi(2)
+!    real(amrex_real), intent(inout) :: U(U_lo(1):U_hi(1),U_lo(2):U_hi(2),nc)
 
-    integer :: n
-    real(amrex_real) :: xlo(2), dx(2)
+!    integer :: n
+!    real(amrex_real) :: xlo(2), dx(2)
 
     ! Make up something for these that gets what we want
-    dx(1:2)  = 1._amrex_real
-    xlo(1:2) = 0._amrex_real
+!    dx(1:2)  = 1._amrex_real
+!    xlo(1:2) = 0._amrex_real
 
-    write (*,*) "Running 2d version of pushvtog..."
+!    write (*,*) "Running 2d version of pushvtog..."
 
-    do n = 1,nc
-       call hoextraptocc(U(:,:,n),U_lo(1),U_lo(2),U_hi(1),U_hi(2),lo,hi,dx,xlo)
-    enddo
-      
-  end subroutine pushvtog2d
-  
+!    do n = 1,nc
+!       call hoextraptocc(U(:,:,n),U_lo(1),U_lo(2),U_hi(1),U_hi(2),lo,hi,dx,xlo)
+!    enddo
+
+!  end subroutine pushvtog2d
+
   subroutine gradient(lo, hi, U, U_lo, U_hi, G, G_lo, G_hi, dx) bind(c,name='gradient')
     implicit none
     integer, intent(in) :: lo(3),  hi(3)

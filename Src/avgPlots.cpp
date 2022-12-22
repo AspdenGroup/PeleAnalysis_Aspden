@@ -20,14 +20,14 @@ print_usage (int,
     std::cerr << argv[0] << " infile=<name> outfile=<> [options] \n\tOptions:\n";
     exit(1);
 }
-
+/*
 std::string
 getFileRoot(const std::string& infile)
 {
-    vector<std::string> tokens = Tokenize(infile,std::string("/"));
+    Vector<std::string> tokens = Tokenize(infile,std::string("/"));
     return tokens[tokens.size()-1];
 }
-
+*/
 int
 main (int   argc,
       char* argv[])
@@ -65,11 +65,22 @@ main (int   argc,
     
     AmrData& amrData0 = dataServices0.AmrDataRef();
 
-    // read/write all comps
-    int nComp = amrData0.NComp();
+    // read/write all comps   
+    int nComp = pp.countval("comps");
     Vector<int> comps(nComp);
-    for (int i=0; i<nComp; ++i)
-      comps[i] = i;
+    if (nComp > 0) {
+      pp.getarr("comps",comps);
+      for (int i = 0; i<nComp; ++i) {
+	Print() << "averaging comp " << comps[i] << std::endl;
+      }
+    } else {
+      Print() << "averaging all comps" << std::endl;
+      nComp = amrData0.NComp();
+      comps.resize(nComp);
+      for (int i=0; i<nComp; ++i) { 
+	comps[i] = i;
+      }
+    }
 
     int finestLevel = amrData0.FinestLevel();
     //finest level to go down to
@@ -102,13 +113,17 @@ main (int   argc,
     Print() << "... avgMF created" << std::endl;
     Real time0 = amrData0.Time();
     Vector<std::string> names(nComp);
+    Vector<int> destComps(nComp);
     for (int i=0; i<nComp; ++i) {
       names[i] = amrData0.PlotVarNames()[comps[i]];
+      destComps[i]=i; 
       amrData0.FlushGrids(comps[i]); //do i need to flush if not filled?
     }
-    
     Real timeFinal = 0;
     Print() << "avgPlotfile setup completed." << std::endl;
+    Long fab_megabytes = amrex::TotalBytesAllocatedInFabsHWM() / (1024*1024);
+    ParallelDescriptor::ReduceLongMax(fab_megabytes, ParallelDescriptor::IOProcessorNumber());
+    Print() << "Highest MFs mem. allocated on CPU (MB): " << fab_megabytes << std::endl;
     Print() << "Starting averaging... " << std::endl;
     for (int iFile = 0; iFile<numFiles; iFile++) {
       // Set up for reading pltfile
@@ -121,33 +136,26 @@ main (int   argc,
 
       // make space
       std::unique_ptr<MultiFab> fileData;
-      fileData.reset(new MultiFab(newba,DistributionMapping(newba),nComp,0));
-	//MultiFab fileData(newba,DistributionMapping(newba),nComp,0);
+      fileData.reset(new MultiFab(newba,DistributionMapping(newba),nComp,0)); //should remove old multifab and replace with new one on loop
       Print() << "... loading " << infiles[iFile] << std::endl;
       // load data
-      amrData.FillVar(*fileData,finestLevel,amrData.PlotVarNames(),comps);
+      amrData.FillVar(*fileData,finestLevel,names,destComps);
+      Print() << "... " << infiles[iFile] << " loaded" << std::endl;
+      Print() << "... flushing grids" << std::endl;
       for (int i = 0; i < nComp; i++) {
 	  amrData.FlushGrids(comps[i]);
       }
-      Print() << "... " << infiles[iFile] << " loaded" << std::endl;
+      fab_megabytes = amrex::TotalBytesAllocatedInFabsHWM() / (1024*1024);
+      ParallelDescriptor::ReduceLongMax(fab_megabytes, ParallelDescriptor::IOProcessorNumber());
+      Print() << "... Highest MFs mem. allocated on CPU after loading fileData (MB): " << fab_megabytes << std::endl;
       Print() << "... adding to averaged MF" << std::endl;
-      //MultiFab::Saxpy(*avgMF,1.0/numFiles,*fileData,0,0,nComp,0);
-      for (MFIter mfi(*avgMF,TilingIfNotGPU()); mfi.isValid(); ++mfi) {
-	const Box& bx = mfi.tilebox();
-	Array4<Real> outarray = avgMF->array(mfi);
-	Array4<Real> inarray = fileData->array(mfi);
-	AMREX_PARALLEL_FOR_4D (bx, nComp, i, j, k, n,
-			       {
-				 outarray(i,j,k,n) += inarray(i,j,k,n)/numFiles;
-			       });
-      }
-      
+      MultiFab::Saxpy(*avgMF,1.0/numFiles,*fileData,0,0,nComp,0);
       
       if(iFile == numFiles-1) {
 	timeFinal = amrData.Time();
       }
       //Print() << "... deleting fileData" << std::endl;
-      //fileData.reset();	        
+      //fileData.reset();
     }
     Print() << "Completed averaging." << std::endl;
     Print() << "Writing " << outfile << "..." << std::endl;
@@ -179,7 +187,7 @@ main (int   argc,
 	
 	AmrData& amrData = dataServices.AmrDataRef();
 	
-       // make space
+	// make space
 	std::unique_ptr<MultiFab> fileData;
 	fileData.reset(new MultiFab(newba,DistributionMapping(newba),nComp,0));
 	Print() << "... loading " << infiles[iFile] << std::endl;

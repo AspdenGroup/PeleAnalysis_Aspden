@@ -115,7 +115,6 @@ int main(int argc, char *argv[])
   } else {
     amrex::Error("Need 3 values for probLo");
   }
-
   
   Real probHi[3];
   if (pp.countval("probHi")==3) {
@@ -138,17 +137,16 @@ int main(int argc, char *argv[])
       dx[i] = (probHi[i]-probLo[i])/(Real)nx[i];
     }
   }
-
   if (verbose) std::cout << "probLo = "
 			 << probLo[0] << " " << probLo[1] << " " << probLo[2] << std::endl;
-  
   if (verbose) std::cout << "probHi = "
 			 << probHi[0] << " " << probHi[1] << " " << probHi[2] << std::endl;
-  
-  if (verbose) std::cout << "dx = "
-			 << dx[0] << " " << dx[1] << " " << dx[2] << std::endl;
   RealBox rb(probLo,probHi); // make real box for geometry
   
+
+  if (verbose) std::cout << "dx = "
+			 << dx[0] << " " << dx[1] << " " << dx[2] << std::endl;
+
   //
   // Let's try a slab domain decomposition
   //
@@ -202,56 +200,34 @@ int main(int argc, char *argv[])
 
   // how do we loop over the boxes in the multifab properly?
   int iFile=0;
-  IntVect topslicebig = pdHi;
-  IntVect topslicesmall = pdLo;
-  topslicebig[2] = pdLo[2];
-  Box topBox(topslicesmall,topslicebig);
-  FArrayBox topFab(topBox,nVars);
-  int slicenum = 0;
-
-  ifs.open(infile[slicenum].c_str());
-  fab.readFrom(ifs);
-  ifs.close();
-  IntVect shift = {0,0,-fab.box().smallEnd(2)};
-  fab.shift(shift);  
-  topFab.copy(fab);
+  for (MFIter mfi(*mf); mfi.isValid(); ++mfi) {
     
-  int diffComp=3;
-  int corrComp=diffComp;
-  int pnorm=1;
-  FArrayBox topFabsq(topBox,nVars);
-  topFabsq.copy(topFab);
-  topFabsq.minus(topFab.sum(corrComp)/(Real)pCells);
-  topFabsq.mult(topFabsq);
- 
-  FArrayBox diffFab(topBox,nVars);
-  Vector<Real> diffs(nFiles);
-  FArrayBox corrFab(topBox,nVars);
-  Vector<Real> autocorr(nFiles);
-  for (iFile=0; iFile<nFiles; iFile++) {
+    // destination fab
+    FArrayBox& myFab = (*mf)[mfi];
     
     // load data
-    std::cout << "iFile = " << iFile << ": " << infile[iFile].c_str() << std::endl;
-    ifs.open(infile[iFile].c_str());
+    std::cout << "iFile = " << iFile << ": " << infile[nFiles-iFile-1].c_str() << std::endl;
+    ifs.open(infile[nFiles-iFile-1].c_str());
     fab.readFrom(ifs);
     ifs.close();
-    
-    IntVect shift = {0,0,-fab.box().smallEnd(2)};
+    IntVect shift = {0,0,iFile-fab.box().smallEnd(2)};
     fab.shift(shift);
+    const Box& inBox = fab.box();
+    //amrex::Print() << "inBox = " << inBox << std::endl;
+    //amrex::Print() << "myFab box= " << myFab.box() << std::endl;
+    for (int dir=0; dir<2; dir++) {
+      if (inBox.length(dir)!=nx[dir]) {
+	std::cerr << "file = " << infile[iFile] << std::endl;
+	std::cerr << "inBox.length(" << dir << ") = " << inBox.length(dir) << std::endl;
+	amrex::Error("inBox.length mismatch!");
+      }
+    }
+
+    // copy data
+    myFab.copy(fab);
     
-    diffFab.copy(topFab);
-    diffFab.minus(fab);
-    diffs[iFile] = diffFab.norm(pnorm,diffComp,1);
-
-    corrFab.copy(topFab);
-    corrFab.minus(corrFab.sum(corrComp)/(Real)pCells);
-    fab.minus(fab.sum(corrComp)/(Real)pCells);
-    corrFab.mult(fab);
-    autocorr[iFile] = corrFab.sum(corrComp)/topFabsq.sum(corrComp);
-    //    iFile++;
+    iFile++;
   }
-
-  
 
   // write the output plotfile
   // should be able to replace with modern call to writeplotfile
@@ -259,15 +235,8 @@ int main(int argc, char *argv[])
   if (verbose) {
     std::cout << "*** writing plotfile " << std::endl;
   }
-  //  int levelSteps;
-  //WriteSingleLevelPlotfile(outfile,*mf,names, geoms,time,levelSteps);
-
-  outfile="diff.dat";
-  std::ofstream os(outfile.c_str(),std::ios::out);
-  for (int n = 0; n<nFiles; n++) {
-    os << n << " " << diffs[n] << " " << autocorr[n] << "\n";
-  }
-  os.close();
+  int levelSteps;
+  WriteSingleLevelPlotfile(outfile,*mf,names, geoms,time,levelSteps);
 }
 
 
