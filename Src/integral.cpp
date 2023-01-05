@@ -10,104 +10,117 @@
 
 using namespace amrex;
 
-void integrate1d(int dir, int dir1, int dir2, int ldir1, int ldir2, Vector<Vector<Vector<Real>>>& outdata, Vector<Real> x, Vector<Real> y, AmrData& amrData, Vector<MultiFab*> indata, int nVars, int finestLevel) {
-  Real length = amrData.ProbSize()[dir];
+void integrate1d(int dir, int dir1, int dir2, int ldir1, int ldir2, Vector<Vector<Vector<Real>>>& outdata, Vector<Real> x, Vector<Real> y, AmrData& amrData, Vector<MultiFab*> indata, int nVars, int finestLevel, int cComp, Real cMin, Real cMax) {
+  Real length = 0.0;
+  Vector<int> d(3);
   for (int lev = 0; lev <= finestLevel; lev++) {
-    Real dx = amrData.DxLevel()[lev][dir];
-    Real contr = dx/length;
+    Real dxLev = amrData.DxLevel()[lev][dir];
     Print() << "Integrating level "<< lev << std::endl;
     for (MFIter mfi(*indata[lev]); mfi.isValid(); ++mfi) {
       const Box& bx = mfi.tilebox();
       Array4<Real> const& inbox  = (*indata[lev]).array(mfi);
-      Vector<int> d(3);
       AMREX_PARALLEL_FOR_3D(bx, i, j, k, {
-	  if (inbox(i,j,k,nVars) > 1e-8) {
+	  if (inbox(i,j,k,nVars) > 1e-8 && (cComp < 0 || (inbox(i,j,k,cComp) >= cMin && inbox(i,j,k,cComp) < cMax))) {
+	    length += dxLev;
 	    d[0] = i;
 	    d[1] = j;
 	    d[2] = k;
 	    for (int n = 0; n < nVars; n++) {
-	      outdata[n][d[dir1]][d[dir2]] += contr*inbox(i,j,k,n);
+	      outdata[n][d[dir1]][d[dir2]] += dxLev*inbox(i,j,k,n);
 	    }
 	  }
 	});
     }
   }
-  int IO = ParallelDescriptor::IOProcessorNumber();
-  ParallelDescriptor::ReduceRealSum(outdata[0][0].data(),nVars*ldir1*ldir2,IO);
+  ParallelDescriptor::ReduceRealSum(outdata[0][0].data(),nVars*ldir1*ldir2);
+  ParallelDescriptor::ReduceRealSum(length);
   
+  for (int n = 0; n<nVars; n++) {
+    for (int i = 0; i < ldir1; i++) {
+      for (int j = 0; j < ldir2; j++) {
+	outdata[n][i][j] /= length;
+      }
+    }
+  }
   Vector<Real> plo = amrData.ProbLo();
   Vector<Real> phi = amrData.ProbHi();
-  Real dx = amrData.DxLevel()[finestLevel][dir1];
-  Real dy = amrData.DxLevel()[finestLevel][dir2];
+  Real dxFine = amrData.DxLevel()[finestLevel][dir1];
+  Real dyFine = amrData.DxLevel()[finestLevel][dir2];
   for (int i = 0; i < ldir1; i++) {
-    x[i] = plo[dir1] + (i+0.5)*dx;
+    x[i] = plo[dir1] + (i+0.5)*dxFine;
   }
   for (int i = 0; i < ldir2; i++) {
-    y[i] = plo[dir2] + (i+0.5)*dy;
+    y[i] = plo[dir2] + (i+0.5)*dyFine;
   }  
   return;
 }
 
-void integrate2d(int dir, int dir1, int dir2, int ldir, Vector<Vector<Real>>& outdata, Vector<Real> x, AmrData& amrData, Vector<MultiFab*> indata,int nVars, int finestLevel) {
-  Real area = amrData.ProbSize()[dir1]*amrData.ProbSize()[dir2];
+void integrate2d(int dir, int dir1, int dir2, int ldir, Vector<Vector<Real>>& outdata, Vector<Real> x, AmrData& amrData, Vector<MultiFab*> indata,int nVars, int finestLevel, int cComp, Real cMin, Real cMax) {
+  Real area = 0.0;
+  Vector<int> d(3);
   for (int lev = 0; lev <= finestLevel; lev++) {
-    Real dx = amrData.DxLevel()[lev][dir1];
-    Real dy = amrData.DxLevel()[lev][dir2];
-    Real contr = dx*dy/area;
+    Real dxLev = amrData.DxLevel()[lev][dir1];
+    Real dyLev = amrData.DxLevel()[lev][dir2];
+    Real areaLev = dxLev*dyLev;
     Print() << "Integrating level "<< lev << std::endl;
     for (MFIter mfi(*indata[lev]); mfi.isValid(); ++mfi) {
       const Box& bx = mfi.tilebox();
       Array4<Real> const& inbox  = (*indata[lev]).array(mfi);
-      Vector<int> d(3);
       AMREX_PARALLEL_FOR_3D(bx, i, j, k, {
-	  if (inbox(i,j,k,nVars) > 1e-8) {
+	  if (inbox(i,j,k,nVars) > 1e-8 &&  (cComp < 0 || (inbox(i,j,k,cComp) >= cMin && inbox(i,j,k,cComp) < cMax))) {
+	    area += areaLev;
 	    d[0] = i;
 	    d[1] = j;
 	    d[2] = k;
 	    for (int n = 0; n < nVars; n++) {
-	      outdata[n][d[dir]] += contr*inbox(i,j,k,n);
+	      outdata[n][d[dir]] += areaLev*inbox(i,j,k,n);
 	    }
 	  }
 	});
     }
   }
-  int IO = ParallelDescriptor::IOProcessorNumber();
-  ParallelDescriptor::ReduceRealSum(outdata[0].data(),nVars*ldir,IO);
+  ParallelDescriptor::ReduceRealSum(outdata[0].data(),nVars*ldir);
+  ParallelDescriptor::ReduceRealSum(area);
+  for (int n = 0; n<nVars; n++) {
+    for (int i = 0; i < ldir; i++) {
+      outdata[n][i] /= area;
+    }
+  }
   Vector<Real> plo = amrData.ProbLo();
   Vector<Real> phi = amrData.ProbHi();
-  Real dx = amrData.DxLevel()[finestLevel][dir];
+  Real dxFine = amrData.DxLevel()[finestLevel][dir];
   for (int i = 0; i < ldir; i++) {
-    x[i] = plo[dir] + (i+0.5)*dx;
+    x[i] = plo[dir] + (i+0.5)*dxFine;
   }
   return;
 }
   
-void integrate3d(Vector<Real>& outdata, AmrData& amrData, Vector<MultiFab*> indata, int nVars, int finestLevel) {
-  Real volume = amrData.ProbSize()[0]*amrData.ProbSize()[1]*amrData.ProbSize()[2];
+void integrate3d(Vector<Real>& outdata, AmrData& amrData, Vector<MultiFab*> indata, int nVars, int finestLevel, int cComp, Real cMin, Real cMax) {
+  Real volume = 0.0;
   for (int lev = 0; lev <= finestLevel; lev++) {
-    Real dx = amrData.DxLevel()[lev][0];
-    Real dy = amrData.DxLevel()[lev][1];
-    Real dz = amrData.DxLevel()[lev][2];
-    Real contr = dx*dy*dz/volume;
+    Real dxLev = amrData.DxLevel()[lev][0];
+    Real dyLev = amrData.DxLevel()[lev][1];
+    Real dzLev = amrData.DxLevel()[lev][2];
+    Real volLev = dxLev*dyLev*dzLev;
     Print() << "Integrating level "<< lev << std::endl;
     for (MFIter mfi(*indata[lev]); mfi.isValid(); ++mfi) {
       const Box& bx = mfi.tilebox();
       Array4<Real> const& inbox  = (*indata[lev]).array(mfi);
-      Vector<int> d(3);
       AMREX_PARALLEL_FOR_3D(bx, i, j, k, {
-	  if (inbox(i,j,k,nVars) > 1e-8) {
-	    d[0] = i;
-	    d[1] = j;
-	    d[2] = k;
+	  if (inbox(i,j,k,nVars) > 1e-8 &&  (cComp < 0 || (inbox(i,j,k,cComp) >= cMin && inbox(i,j,k,cComp) < cMax))) {
+	    volume += volLev;
 	    for (int n = 0; n < nVars; n++) {
-	      outdata[n] += contr*inbox(i,j,k,n);
+	      outdata[n] += volLev*inbox(i,j,k,n);
 	    }
 	  }
 	});
     }
   }
-  int IO = ParallelDescriptor::IOProcessorNumber();
-  ParallelDescriptor::ReduceRealSum(outdata.data(),nVars,IO);
+  ParallelDescriptor::ReduceRealSum(outdata.data(),nVars);
+  ParallelDescriptor::ReduceRealSum(volume);
+  for (int n = 0; n<nVars; n++) {
+    outdata[n] /= volume;
+  }
   return;
 }
 
@@ -245,8 +258,20 @@ int main(int argc, char *argv[])
     }
   }
   Print() << "Intersect determined" << std::endl;
-
-  
+  std::string cVar;
+  Real cMin,cMax;
+  int cComp=-1;
+  pp.query("cVar",cVar);
+  pp.query("cMin",cMin);
+  pp.query("cMax",cMax);
+  if (!cVar.empty()) {
+    for (int n = 0; n<nVars; n++) {
+      if (vars[n] == cVar) {
+	cComp = n;
+	break;
+      }
+    }
+  }
   int integralDimension;
   pp.get("integralDimension",integralDimension);
   int dir, dir1, dir2;
@@ -270,7 +295,7 @@ int main(int argc, char *argv[])
       Vector<Vector<Real>> tmp2(ldir1,tmp1);
       Vector<Vector<Vector<Real>>> outdata(nVars,tmp2);
       //do 1d integration
-      integrate1d(dir,dir1,dir2,ldir1,ldir2,outdata,x,y,amrData,indata,nVars,finestLevel);
+      integrate1d(dir,dir1,dir2,ldir1,ldir2,outdata,x,y,amrData,indata,nVars,finestLevel,cComp,cMin,cMax);
       Print() << "Integration completed" << std::endl;
       //output data in desired format
       Print() << "Writing data as "+format << std::endl;
@@ -317,7 +342,7 @@ int main(int argc, char *argv[])
       Vector<Real> x(ldir);
       Vector<Real> tmp(ldir,0.0);
       Vector<Vector<Real>> outdata(nVars,tmp);
-      integrate2d(dir,dir1,dir2,ldir,outdata,x,amrData,indata,nVars,finestLevel);
+      integrate2d(dir,dir1,dir2,ldir,outdata,x,amrData,indata,nVars,finestLevel,cComp,cMin,cMax);
       Print() << "Integration completed" << std::endl;
       Print() << "Writing data as "+format << std::endl;
       if (ParallelDescriptor::IOProcessor()) {
@@ -336,7 +361,7 @@ int main(int argc, char *argv[])
     {
       format="dat"; //probably add an option for binary output
       Vector<Real> outdata(nVars,0.0);
-      integrate3d(outdata,amrData,indata,nVars,finestLevel);
+      integrate3d(outdata,amrData,indata,nVars,finestLevel,cComp,cMin,cMax);
       Print() << "Integration completed" << std::endl;
       Print() << "Writing data as "+format << std::endl;
       if (ParallelDescriptor::IOProcessor()) {
