@@ -271,7 +271,7 @@ int main(int argc, char *argv[])
   
   int integralDimension;
   pp.get("integralDimension",integralDimension);
-  AMREX_ALWAYS_ASSERT(integralDimension<=3);
+  //AMREX_ALWAYS_ASSERT(integralDimension<=3);
   int finestLevel = amrData.FinestLevel();
   pp.query("finestLevel", finestLevel);
   int Nlev = finestLevel + 1;
@@ -297,20 +297,25 @@ int main(int argc, char *argv[])
   int dir, dir1, dir2;
   std::string format="dat";
   std::string outfile= infile+"_integral";
+  
+  Print() << "integralDimension = " << integralDimension << std::endl;
   switch(integralDimension) {
   case 1:
     {
+      Print() << "in case 1" << std::endl;
       pp.get("dir",dir);
       dir1 = (dir+1)%3;
       dir2 = (dir+2)%3;
       pp.query("format",format);
-      AMREX_ALWAYS_ASSERT(format=="ppm" || format=="dat");	
+      AMREX_ALWAYS_ASSERT(format=="ppm" || format=="dat");
+      break;
     }
   case 2:
     {
       pp.get("dir1",dir1);
       pp.get("dir2",dir2);
       dir = 3-dir1-dir2;
+      break;
     }
     //case 3 doesn't care about directions
   }
