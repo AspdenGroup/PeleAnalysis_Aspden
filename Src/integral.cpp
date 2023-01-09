@@ -11,10 +11,10 @@
 using namespace amrex;
 
 void integrate1d(int dir, int dir1, int dir2, Vector<Vector<Vector<Real>>>& outdata, Vector<Real>& x, Vector<Real>& y, AmrData& amrData, Vector<MultiFab*> indata, int nVars, int finestLevel, int cComp, Real cMin, Real cMax, int avg) {
-  Box probDomain = amrData.ProbDomain()[finestLevel];
+  Box probDomainFine = amrData.ProbDomain()[finestLevel];
   //int ldir = probDomain.length(dir);
-  int ldir1 = probDomain.length(dir1);
-  int ldir2 = probDomain.length(dir2);
+  int ldir1 = probDomainFine.length(dir1);
+  int ldir2 = probDomainFine.length(dir2);
   Vector<Real> contrtmp(ldir2,0.0);
   Vector<Vector<Real>> contr(ldir1,contrtmp);
   IntVect d;
