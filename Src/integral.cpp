@@ -55,7 +55,6 @@ void integrate1d(int dir, int dir1, int dir2, Vector<Vector<Vector<Real>>>& outd
   Real dxFine = amrData.DxLevel()[finestLevel][dir1];
   Real dyFine = amrData.DxLevel()[finestLevel][dir2];
   Real dzFine = amrData.DxLevel()[finestLevel][dir];
-  Real length = 0.0;
   if (avg) {
     for (int n = 0; n<nVars; n++) {
       for (int i = 0; i < ldir1; i++) {
@@ -315,7 +314,6 @@ int main(int argc, char *argv[])
   switch(integralDimension) {
   case 1:
     {
-      Print() << "in case 1" << std::endl;
       pp.get("dir",dir);
       dir1 = (dir+1)%3;
       dir2 = (dir+2)%3;
@@ -382,28 +380,28 @@ int main(int argc, char *argv[])
 	    writeDat2D(outdata[n],outfile+"_"+vars[n]+".dat",ldir1,ldir2);
 	  }
 	} else if (format == "ppm") {
-	  for (int n = 0; n < nVars; n++) { 
-	    int goPastMax = 1;
-	    pp.query("goPastMax",goPastMax);
-	    Vector<Real> vMin(nVars);
-	    Vector<Real> vMax(nVars);
-	    for (int n=0; n<nVars; n++) {
-	      char argName[12];
-	      sprintf(argName,"useminmax%i",n+1);
-	      int nMinMax = pp.countval(argName);
-	      if (nMinMax > 0) {
-		Print() << "Reading min/max from command line" << std::endl;
-		if (nMinMax != 2) {
-		  Abort("Need to specify 2 values for useMinMax");
-		} else {
-		  pp.get(argName, vMin[n], 0);
-		  pp.get(argName, vMax[n], 1);
-		}
+	  int goPastMax = 1;
+	  pp.query("goPastMax",goPastMax);
+	  Vector<Real> vMin(nVars);
+	  Vector<Real> vMax(nVars);
+	  for (int n=0; n<nVars; n++) {
+	    char argName[12];
+	    sprintf(argName,"useminmax%i",n+1);
+	    int nMinMax = pp.countval(argName);
+	    if (nMinMax > 0) {
+	      Print() << "Reading min/max from command line" << std::endl;
+	      if (nMinMax != 2) {
+		Abort("Need to specify 2 values for useMinMax");
 	      } else {
-		Print() << "Using file values for min/max" << std::endl;
-		findMinMax(outdata[n],ldir1,ldir2,vMin[n],vMax[n]);
+		pp.get(argName, vMin[n], 0);
+		pp.get(argName, vMax[n], 1);
 	      }
+	    } else {
+	      Print() << "Using file values for min/max" << std::endl;
+	      findMinMax(outdata[n],ldir1,ldir2,vMin[n],vMax[n]);
 	    }
+	  }
+	  for (int n = 0; n < nVars; n++) { 
 	    writePPM(outdata[n],outfile+"_"+vars[n]+".ppm",ldir1,ldir2,goPastMax,vMin[n],vMax[n]);
 	  }
 	} //can add more formats here if we want - add to assert above
