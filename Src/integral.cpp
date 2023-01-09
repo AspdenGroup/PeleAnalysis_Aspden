@@ -17,10 +17,17 @@ void integrate1d(int dir, int dir1, int dir2, Vector<Vector<Vector<Real>>>& outd
   int ldir2 = probDomain.length(dir2);
   Vector<Real> contrtmp(ldir2,0.0);
   Vector<Vector<Real>> contr(ldir1,contrtmp);
-  Vector<int> d(3);
+  IntVect d;
   int refRatio = 1;
   for (int lev = finestLevel; lev >= 0; lev--) {
     Real dzLev = amrData.DxLevel()[lev][dir];
+    Box probDomain = amrData.ProbDomain()[lev];
+    //int ldir = probDomain.length(dir);
+    int levdir1 = probDomain.length(dir1);
+    int levdir2 = probDomain.length(dir2);
+    Vector<Real> tmp(levdir1,0.0);
+    Vector<Vector<Real>> contrLev(levdir2,tmp);
+    Vector<Vector<Vector<Real>>> outdataLev(nVars,contrLev);
     if (lev < finestLevel) refRatio *= amrData.RefRatio()[lev];
     Print() << "Integrating level "<< lev << std::endl;
     for (MFIter mfi(*indata[lev]); mfi.isValid(); ++mfi) {
@@ -31,18 +38,28 @@ void integrate1d(int dir, int dir1, int dir2, Vector<Vector<Vector<Real>>>& outd
 	    d[0] = i;
 	    d[1] = j;
 	    d[2] = k;
-	    for (int rx = 0; rx < refRatio; rx++) {
-	      for (int ry = 0; ry < refRatio; ry++) {
-		contr[refRatio*d[dir1]+rx][refRatio*d[dir2]+ry] += dzLev;
-		for (int n = 0; n < nVars; n++) {
-		  outdata[n][refRatio*d[dir1]+rx][refRatio*d[dir2]+ry] += dzLev*inbox(i,j,k,n);
-		}
-	      }
+	    contrLev[d[dir1]][d[dir2]] += dzLev;
+	    for (int n = 0; n < nVars; n++) {
+	      outdataLev[n][d[dir1]][d[dir2]] += dzLev*inbox(i,j,k,n);
+	    }
+	  }	   
+	  });
+    }
+    for (int l1 = 0, k1 = 0; l1<levdir1; l1++) {
+      for (int rx = 0; rx < refRatio; rx++,k1++) {
+	for (int l2 = 0, k2 = 0; l2<levdir2; l2++) {
+	  for (int ry = 0; ry < refRatio; ry++, k2++) {
+	    contr[k1][k2] += contrLev[l1][l2];
+	    for (int n = 0; n < nVars; n++) {
+	      outdata[n][k1][k2] += outdataLev[n][l1][l2];
 	    }
 	  }
-	});
+	}
+      }
     }
   }
+	
+   
   for (int i = 0; i < ldir1; i++) {
     for (int n = 0; n<nVars; n++) {
       ParallelDescriptor::ReduceRealSum(outdata[n][i].data(),ldir2);
@@ -79,7 +96,7 @@ void integrate2d(int dir, int dir1, int dir2, Vector<Vector<Real>>& outdata, Vec
   //int ldir1 = probDomain.length(dir1);
   //int ldir2 = probDomain.length(dir2);
   Vector<Real> contr(ldir,0.0);
-  Vector<int> d(3);
+  IntVect d(3);
   int refRatio = 1;
   for (int lev = finestLevel; lev >= 0; lev--) {
     Real dxLev = amrData.DxLevel()[lev][dir1];
