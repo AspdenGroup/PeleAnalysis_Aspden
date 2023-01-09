@@ -238,6 +238,19 @@ void writePPM(Vector<Vector<Real>> vect, std::string filename, int dim1, int dim
   fclose(file);
   return;
 }
+
+void findMinMax(Vector<Vector<Real>> vect, int dim1, int dim2, Real &min, Real &max) {
+  min = vect[0][0];
+  max = vect[0][0];
+  for (int i = 0; i < dim1; i++) {
+    for (int j = 0; j < dim2; j++) {
+      if (vect[i][j] < min) min = vect[i][j];
+      if (vect[i][j] > max) max = vect[i][j];
+    }
+  }
+  return;
+}
+
 int main(int argc, char *argv[])
 {
   amrex::Initialize(argc, argv);
@@ -378,11 +391,17 @@ int main(int argc, char *argv[])
 	      char argName[12];
 	      sprintf(argName,"useminmax%i",n+1);
 	      int nMinMax = pp.countval(argName);
-	      if (nMinMax != 2) {
-		Abort("Need to specify 2 values for useMinMax");
+	      if (nMinMax > 0) {
+		Print() << "Reading min/max from command line" << std::endl;
+		if (nMinMax != 2) {
+		  Abort("Need to specify 2 values for useMinMax");
+		} else {
+		  pp.get(argName, vMin[n], 0);
+		  pp.get(argName, vMax[n], 1);
+		}
 	      } else {
-		pp.get(argName, vMin[n], 0);
-		pp.get(argName, vMax[n], 1);
+		Print() << "Using file values for min/max" << std::endl;
+		findMinMax(outdata[n],ldir1,ldir2,vMin[n],vMax[n]);
 	      }
 	    }
 	    writePPM(outdata[n],outfile+"_"+vars[n]+".ppm",ldir1,ldir2,goPastMax,vMin[n],vMax[n]);
