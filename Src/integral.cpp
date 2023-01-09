@@ -11,23 +11,16 @@
 using namespace amrex;
 
 void integrate1d(int dir, int dir1, int dir2, Vector<Vector<Vector<Real>>>& outdata, Vector<Real>& x, Vector<Real>& y, AmrData& amrData, Vector<MultiFab*> indata, int nVars, int finestLevel, int cComp, Real cMin, Real cMax, int avg) {
-  Box probDomainFine = amrData.ProbDomain()[finestLevel];
-  //int ldir = probDomain.length(dir);
-  int ldir1 = probDomainFine.length(dir1);
-  int ldir2 = probDomainFine.length(dir2);
+
+  Box probDomain = amrData.ProbDomain()[finestLevel];
+  int ldir1 = probDomain.length(dir1);
+  int ldir2 = probDomain.length(dir2);
   Vector<Real> contrtmp(ldir2,0.0);
   Vector<Vector<Real>> contr(ldir1,contrtmp);
   IntVect d;
   int refRatio = 1;
   for (int lev = finestLevel; lev >= 0; lev--) {
     Real dzLev = amrData.DxLevel()[lev][dir];
-    Box probDomain = amrData.ProbDomain()[lev];
-    //int ldir = probDomain.length(dir);
-    int levdir1 = probDomain.length(dir1);
-    int levdir2 = probDomain.length(dir2);
-    Vector<Real> tmp(levdir1,0.0);
-    Vector<Vector<Real>> contrLev(levdir2,tmp);
-    Vector<Vector<Vector<Real>>> outdataLev(nVars,contrLev);
     if (lev < finestLevel) refRatio *= amrData.RefRatio()[lev];
     Print() << "Integrating level "<< lev << std::endl;
     for (MFIter mfi(*indata[lev]); mfi.isValid(); ++mfi) {
@@ -38,40 +31,26 @@ void integrate1d(int dir, int dir1, int dir2, Vector<Vector<Vector<Real>>>& outd
 	    d[0] = i;
 	    d[1] = j;
 	    d[2] = k;
-	    contrLev[d[dir1]][d[dir2]] += dzLev;
-	    for (int n = 0; n < nVars; n++) {
-	      outdataLev[n][d[dir1]][d[dir2]] += dzLev*inbox(i,j,k,n);
+	    for (int rx = 0; rx < refRatio; rx++) {
+	      for (int ry = 0; ry < refRatio; ry++) {
+		contr[refRatio*d[dir1]+rx][refRatio*d[dir2]+ry] += dzLev;
+		for (int n = 0; n < nVars; n++) {
+		  outdata[n][refRatio*d[dir1]+rx][refRatio*d[dir2]+ry] += dzLev*inbox(i,j,k,n);
+		}
+	      }
 	    }
-	  }	   
 	  });
-    }
-    for (int l1 = 0, k1 = 0; l1<levdir1; l1++) {
-      for (int rx = 0; rx < refRatio; rx++,k1++) {
-	for (int l2 = 0, k2 = 0; l2<levdir2; l2++) {
-	  for (int ry = 0; ry < refRatio; ry++, k2++) {
-	    contr[k1][k2] += contrLev[l1][l2];
-	    for (int n = 0; n < nVars; n++) {
-	      outdata[n][k1][k2] += outdataLev[n][l1][l2];
-	    }
-	  }
+	
 	}
-      }
+	
     }
   }
-	
-   
   for (int i = 0; i < ldir1; i++) {
     for (int n = 0; n<nVars; n++) {
       ParallelDescriptor::ReduceRealSum(outdata[n][i].data(),ldir2);
     }
     ParallelDescriptor::ReduceRealSum(contr[i].data(),ldir2);
   }
-  Vector<Real> plo = amrData.ProbLo();
-  Vector<Real> phi = amrData.ProbHi();
-
-  Real dxFine = amrData.DxLevel()[finestLevel][dir1];
-  Real dyFine = amrData.DxLevel()[finestLevel][dir2];
-  Real dzFine = amrData.DxLevel()[finestLevel][dir];
   if (avg) {
     for (int n = 0; n<nVars; n++) {
       for (int i = 0; i < ldir1; i++) {
@@ -81,6 +60,11 @@ void integrate1d(int dir, int dir1, int dir2, Vector<Vector<Vector<Real>>>& outd
       }
     }
   }
+  Vector<Real> plo = amrData.ProbLo();
+  Vector<Real> phi = amrData.ProbHi();
+
+  Real dxFine = amrData.DxLevel()[finestLevel][dir1];
+  Real dyFine = amrData.DxLevel()[finestLevel][dir2];
   for (int i = 0; i < ldir1; i++) {
     x[i] = plo[dir1] + (i+0.5)*dxFine;
   }
@@ -93,10 +77,8 @@ void integrate1d(int dir, int dir1, int dir2, Vector<Vector<Vector<Real>>>& outd
 void integrate2d(int dir, int dir1, int dir2, Vector<Vector<Real>>& outdata, Vector<Real>& x, AmrData& amrData, Vector<MultiFab*> indata,int nVars, int finestLevel, int cComp, Real cMin, Real cMax, int avg) {
   Box probDomain = amrData.ProbDomain()[finestLevel];
   int ldir = probDomain.length(dir);
-  //int ldir1 = probDomain.length(dir1);
-  //int ldir2 = probDomain.length(dir2);
   Vector<Real> contr(ldir,0.0);
-  IntVect d(3);
+  IntVect d;
   int refRatio = 1;
   for (int lev = finestLevel; lev >= 0; lev--) {
     Real dxLev = amrData.DxLevel()[lev][dir1];
@@ -126,8 +108,6 @@ void integrate2d(int dir, int dir1, int dir2, Vector<Vector<Real>>& outdata, Vec
     ParallelDescriptor::ReduceRealSum(outdata[n].data(),ldir);
   }
   ParallelDescriptor::ReduceRealSum(contr.data(),ldir);
-  Real dxFine = amrData.DxLevel()[finestLevel][dir1];
-  Real dyFine = amrData.DxLevel()[finestLevel][dir2];
   Real dzFine = amrData.DxLevel()[finestLevel][dir];
   if (avg) {
     for (int n = 0; n<nVars; n++) {
@@ -197,7 +177,7 @@ void writeDat2D(Vector<Vector<Real>> vect, std::string filename, int dim1, int d
 }
 
 void writePPM(Vector<Vector<Real>> vect, std::string filename, int dim1, int dim2, int goPastMax, Real vMin, Real vMax) {
-  unsigned char *buff=(unsigned char*)malloc(3*dim2*dim2*sizeof(char));
+  unsigned char *buff=(unsigned char*)malloc(3*dim1*dim2*sizeof(char));
   for (int i=0; i<dim1; i++) {
     for (int j=0; j<dim2; j++) {
       int bc   = ((dim1-i-1)*dim2+j)*3;
@@ -249,7 +229,7 @@ void writePPM(Vector<Vector<Real>> vect, std::string filename, int dim1, int dim
     }
   }
   FILE *file = fopen(filename.c_str(),"w");
-  fprintf(file,"P6\n%i %i\n255\n",dim1,dim2);
+  fprintf(file,"P6\n%i %i\n255\n",dim2,dim1);
   fwrite(buff,dim1*dim2*3,sizeof(unsigned char),file);
   fclose(file);
   return;
