@@ -10,14 +10,7 @@
 #include <WritePlotFile.H>
 
 #include <AMReX_BLFort.H>
-/*
-#include <mechanism.h>
-#include <chemistry_file.H>
-#include <util.H>
-#include <util_F.H>
-#include <Transport_F.H>
-#include <Fuego_EOS.H>
-*/
+
 using namespace amrex;
 
 //using namespace analysis_util;
