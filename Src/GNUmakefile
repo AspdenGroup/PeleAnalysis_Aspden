@@ -3,7 +3,7 @@ DEBUG	      = FALSE
 DIM	      = 3
 COMP          = gnu
 PRECISION     = DOUBLE
-USE_MPI       = TRUE
+USE_MPI       = FALSE
 USE_OMP       = FALSE
 
 EBASE         = combinePlts
@@ -12,6 +12,7 @@ EBASE         = partStream
 #EBASE         = stream2plt
 #EBASE         = streamScatter
 #EBASE         = streamSub
+#EBASE         = streamBinTubeStats
 #EBASE         = streamBinTubeStats_TLH
 #EBASE         = curvature
 #EBASE         = surfMEFtoDATnorm
@@ -47,23 +48,15 @@ EBASE         = partStream
 #EBASE		= straintensor
 #EBASE		= microscales
 #EBASE		= diffusivefluxes
-#EBASE		= lineOfSight
+EBASE		= grad
 NEEDS_f90_SRC = FALSE
 
-#EBASE         = grad
 #EBASE         = sampleStreamlines
 #EBASE         = stream
-#EBASE         = CORIstream
 #EBASE		= plotZC
 #EBASE		= avgTheta
 #NEEDS_f90_SRC = TRUE
 
-#EBASE         = streamBinTubeStats
-#NEEDS_f90_SRC = FALSE
-#USE_MPI       = FALSE
-
-#USE_MPI       = FALSE
-#DEBUG         = TRUE
 
 include $(AMREX_HOME)/Tools/GNUMake/Make.defs
 
