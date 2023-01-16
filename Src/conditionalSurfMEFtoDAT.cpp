@@ -101,7 +101,7 @@ main (int   argc,
 
     Vector<int> conditionedElt(nElts,0);
     Vector<int> keepPt(nPts,0);
-    for (int i=0; nElts; ++i) {
+    for (int i=0; i < nElts; ++i) {
       int offsetElt = i*MYLEN;
       int localTest = 0;
       for (int k = 0; k<MYLEN; k++) {
@@ -132,7 +132,7 @@ main (int   argc,
     int ptCount = 0;
     for (int i = 0; i < nPts; i++) {
       if(keepPt[i] == 1) {
-	ptMap[ptCount] = i;
+	ptMap[i] = ptCount;
 	ptCount++;
       }
     }
