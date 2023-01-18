@@ -115,10 +115,14 @@ main (int   argc,
         for (int i=0; i<nCompR; ++i)
             compsR[i] = sCompR + i;
     }
-
-    int Nlev = amrDataL.FinestLevel() + 1;
-    BL_ASSERT(Nlev == amrDataR.FinestLevel() + 1);
-
+    int finestLevel = -1;
+    pp.query("finestLevel",finestLevel);
+    if (finestLevel < 0) {
+      AMREX_ALWAYS_ASSERT(amrDataL.FinestLevel() == amrDataR.FinestLevel());
+      finestLevel = amrDataL.FinestLevel();
+    }
+    int Nlev = finestLevel + 1;
+    
     const int nComp = compsL.size() + compsR.size();
     
     Vector<int> is_per(AMREX_SPACEDIM,1);
