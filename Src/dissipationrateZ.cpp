@@ -155,7 +155,8 @@ main (int   argc,
       Print() << "Derive finished for level " << lev << std::endl;
     }
 
-    std::string outfile(getFileRoot(plotFileName) + "_ZT");
+    std::string outfile(getFileRoot(plotFileName) + "_Zdiss");
+    pp.query("outfile",outfile);
     Print() << "Writing new data to " << outfile << std::endl;
     Vector<int> isteps(Nlev, 0);
     Vector<IntVect> refRatios(Nlev-1,{AMREX_D_DECL(2, 2, 2)});
