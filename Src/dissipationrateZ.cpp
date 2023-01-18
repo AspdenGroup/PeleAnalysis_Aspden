@@ -50,20 +50,18 @@ main (int   argc,
       AmrData::SetVerbose(false);
 
     std::string plotFileName; pp.get("infile",plotFileName);
-    int nVar = 6; //T,Z,|gradZ|,density,rhoD(H2),rhoD(O2)
+    int nVar = 5; //Z,|gradZ|,density,rhoD(H2),rhoD(O2)
     Vector<std::string> varNames(nVar);
-    varNames[0] = "temp";
-    int Tid = 0;
-    varNames[1] = "mixture_fraction";
-    int Zid = 1;
-    varNames[2] = "||gradmixture_fraction||";
-    int gradZid = 2;
-    varNames[3] = "density";
-    int rhoid = 3; 
-    varNames[4] = "rhoD(H2)";
-    int rhoDH2id = 4;
-    varNames[5] = "rhoD(O2)";
-    int rhoDO2id = 5;
+    varNames[0] = "mixture_fraction";
+    int Zid = 0;
+    varNames[1] = "||gradmixture_fraction||";
+    int gradZid = 1;
+    varNames[2] = "density";
+    int rhoid = 2; 
+    varNames[3] = "rhoD(H2)";
+    int rhoDH2id = 3;
+    varNames[4] = "rhoD(O2)";
+    int rhoDO2id = 4;
     DataServices::SetBatchMode();
     Amrvis::FileType fileType(Amrvis::NEWPLT);
 
