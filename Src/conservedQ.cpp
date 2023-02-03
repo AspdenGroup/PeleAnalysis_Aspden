@@ -66,10 +66,10 @@ main (int   argc,
     int finestLevel = amrData.FinestLevel();
     pp.query("finestLevel",finestLevel);
     int Nlev = finestLevel + 1;
-    Vector<std::string> varNames = {"density","z_velocity"};
+    Vector<std::string> varNames = {"density","z_velocity","rhoh","temp","Y(H2)"};
 
     const int nCompIn  = varNames.size();
-    int nCompOut = 1+3;
+    int nCompOut = 13;
     
     Vector<std::string> outNames(nCompOut);
     Vector<std::string> inNames(nCompIn);
@@ -78,15 +78,34 @@ main (int   argc,
       destFillComps[i] = i;
     }
     //in
-    const int idrholocal = 0; //rho
-    const int iduzlocal = 1; //zvel
+    const int idrholocal = 0; //rho - keep
+    const int iduzlocal = 1; //zvel - keep
+    const int idrhohlocal = 2; //rhoh - keep
+    const int idtemplocal = 3; //temp - keep
+    const int idh2local = 4; //h2
     //out
-    const int idrhouzlocal = 2; // rho*uz
-    const int idrhouzuzlocal = 3; // rho*uz*uz
+    const int idrhouzlocal = 4; // rho*uz
+    const int idrhouzuzlocal = 5; // rho*uz*uz
+    const int idrhohuzlocal = 6; //rho*h*uz
+    const int idrhohhlocal = 7; //rho*h*h
+    const int idtempuzlocal = 8; // T*uz
+    const int idtemptemplocal = 9; // T*T
+    const int idrhoh2local = 10; //rho*h2
+    const int idrhoh2uzlocal = 11; //rho*h2*uz
+    const int idrhoh2h2local = 12; //rho*h2*h2
     outNames[idrholocal] = "rho";
-    outNames[iduzlocal] = "u_z";
-    outNames[idrhouzlocal] = "rho*u_z";
-    outNames[idrhouzuzlocal] = "rho*u_z*u_z";
+    outNames[iduzlocal] = "uz";
+    outNames[idrhouzlocal] = "rho.uz";
+    outNames[idrhouzuzlocal] = "rho.uz.uz";
+    outNames[idrhohlocal] = "rho.h";
+    outNames[idrhohuzlocal] = "rho.h.uz";
+    outNames[idrhohhlocal] = "rho.h.h";
+    outNames[idtemplocal] = "T";
+    outNames[idtempuzlocal] = "T.uz";
+    outNames[idtemptemplocal] = "T.T";
+    outNames[idrhoh2local] = "rho.h2";
+    outNames[idrhoh2uzlocal] = "rho.h2.uz";
+    outNames[idrhoh2h2local] = "rho.h2.h2";
     Vector<std::unique_ptr<MultiFab>> outdata(Nlev);
     Vector<MultiFab*> indata(Nlev);
     Vector<Geometry> geoms(Nlev);
@@ -115,6 +134,15 @@ main (int   argc,
 	  outbox(i,j,k,iduzlocal) = inbox(i,j,k,iduzlocal);
 	  outbox(i,j,k,idrhouzlocal) = inbox(i,j,k,idrholocal)*inbox(i,j,k,iduzlocal);
 	  outbox(i,j,k,idrhouzuzlocal) = inbox(i,j,k,idrholocal)*inbox(i,j,k,iduzlocal)*inbox(i,j,k,iduzlocal);
+	  outbox(i,j,k,idrhohlocal) = inbox(i,j,k,idrhohlocal);
+	  outbox(i,j,k,idrhohuzlocal) = inbox(i,j,k,idrhohlocal)*inbox(i,j,k,iduzlocal);
+	  outbox(i,j,k,idrhohhlocal) = inbox(i,j,k,idrhohlocal)*inbox(i,j,k,idrhohlocal)/inbox(i,j,k,idrholocal);
+	  outbox(i,j,k,idtemplocal) = inbox(i,j,k,idtemplocal);
+	  outbox(i,j,k,idtempuzlocal) = inbox(i,j,k,idtemplocal)*inbox(i,j,k,iduzlocal);
+	  outbox(i,j,k,idtemptemplocal) = inbox(i,j,k,idtemplocal)*inbox(i,j,k,idtemplocal);
+	  outbox(i,j,k,idrhoh2local) = inbox(i,j,k,idrholocal)*inbox(i,j,k,idh2local);
+	  outbox(i,j,k,idrhoh2uzlocal) = inbox(i,j,k,idrholocal)*inbox(i,j,k,idh2local)*inbox(i,j,k,iduzlocal);
+	  outbox(i,j,k,idrhoh2h2local) = inbox(i,j,k,idrholocal)*inbox(i,j,k,idh2local)*inbox(i,j,k,idh2local);
         });
 	
       }
