@@ -15,8 +15,6 @@ void integrate1d(int dir, int dir1, int dir2, Vector<Vector<Vector<Real>>>& outd
   Box probDomain = amrData.ProbDomain()[finestLevel];
   int ldir1 = probDomain.length(dir1);
   int ldir2 = probDomain.length(dir2);
-  Vector<Real> contrtmp(ldir2,0.0);
-  Vector<Vector<Real>> contr(ldir1,contrtmp);
   IntVect d;
   int refRatio = 1;
   for (int lev = finestLevel; lev >= 0; lev--) {
@@ -33,9 +31,9 @@ void integrate1d(int dir, int dir1, int dir2, Vector<Vector<Vector<Real>>>& outd
 	    d[2] = k;
 	    for (int rx = 0; rx < refRatio; rx++) {
 	      for (int ry = 0; ry < refRatio; ry++) {
-		contr[refRatio*d[dir1]+rx][refRatio*d[dir2]+ry] += dzLev;
-		for (int n = 0; n < nVars; n++) {
-		  outdata[n][refRatio*d[dir1]+rx][refRatio*d[dir2]+ry] += dzLev*inbox(i,j,k,n);
+		outdata[0][refRatio*d[dir1]+rx][refRatio*d[dir2]+ry] += dzLev;
+		for (int n = 1; n < nVars+1; n++) {
+		  outdata[n][refRatio*d[dir1]+rx][refRatio*d[dir2]+ry] += dzLev*inbox(i,j,k,n-1);
 		}
 	      }
 	    }
@@ -46,16 +44,15 @@ void integrate1d(int dir, int dir1, int dir2, Vector<Vector<Vector<Real>>>& outd
     }
   }
   for (int i = 0; i < ldir1; i++) {
-    for (int n = 0; n<nVars; n++) {
+    for (int n = 0; n<nVars+1; n++) {
       ParallelDescriptor::ReduceRealSum(outdata[n][i].data(),ldir2);
     }
-    ParallelDescriptor::ReduceRealSum(contr[i].data(),ldir2);
   }
   if (avg) {
-    for (int n = 0; n<nVars; n++) {
+    for (int n = 1; n<nVars+1; n++) {
       for (int i = 0; i < ldir1; i++) {
 	for (int j = 0; j < ldir2; j++) {
-	  if (contr[i][j] > 0.0) outdata[n][i][j] /= contr[i][j];
+	  if (outdata[0][i][j] > 0.0) outdata[n][i][j] /= outdata[0][i][j];
 	}
       }
     }
@@ -77,7 +74,6 @@ void integrate1d(int dir, int dir1, int dir2, Vector<Vector<Vector<Real>>>& outd
 void integrate2d(int dir, int dir1, int dir2, Vector<Vector<Real>>& outdata, Vector<Real>& x, AmrData& amrData, Vector<MultiFab*> indata,int nVars, int finestLevel, int cComp, Real cMin, Real cMax, int avg) {
   Box probDomain = amrData.ProbDomain()[finestLevel];
   int ldir = probDomain.length(dir);
-  Vector<Real> contr(ldir,0.0);
   IntVect d;
   int refRatio = 1;
   for (int lev = finestLevel; lev >= 0; lev--) {
@@ -95,24 +91,23 @@ void integrate2d(int dir, int dir1, int dir2, Vector<Vector<Real>>& outdata, Vec
 	    d[1] = j;
 	    d[2] = k;
 	    for (int rx = 0; rx < refRatio; rx++) {
-	      contr[refRatio*d[dir]+rx] += areaLev;
-	      for (int n = 0; n < nVars; n++) {
-		outdata[n][refRatio*d[dir]+rx] += areaLev*inbox(i,j,k,n);
+	      outdata[0][refRatio*d[dir]+rx] += areaLev;
+	      for (int n = 1; n < nVars+1; n++) {
+		outdata[n][refRatio*d[dir]+rx] += areaLev*inbox(i,j,k,n-1);
 	      }
 	    }
 	  }
 	});
     }
   }
-  for (int n = 0; n < nVars; n++) {
+  for (int n = 0; n < nVars+1; n++) {
     ParallelDescriptor::ReduceRealSum(outdata[n].data(),ldir);
   }
-  ParallelDescriptor::ReduceRealSum(contr.data(),ldir);
   Real dzFine = amrData.DxLevel()[finestLevel][dir];
   if (avg) {
-    for (int n = 0; n<nVars; n++) {
+    for (int n = 1; n<nVars+1; n++) {
       for (int i = 0; i < ldir; i++) {
-	if (contr[i] > 0.0) outdata[n][i] /=  contr[i];
+	if (outdata[0][i] > 0.0) outdata[n][i] /=  outdata[0][i];
       }
     }
   }
@@ -125,7 +120,6 @@ void integrate2d(int dir, int dir1, int dir2, Vector<Vector<Real>>& outdata, Vec
 }
   
 void integrate3d(Vector<Real>& outdata, AmrData& amrData, Vector<MultiFab*> indata, int nVars, int finestLevel, int cComp, Real cMin, Real cMax, int avg) {
-  Real volume = 0.0;
   for (int lev = 0; lev <= finestLevel; lev++) {
     Real dxLev = amrData.DxLevel()[lev][0];
     Real dyLev = amrData.DxLevel()[lev][1];
@@ -137,19 +131,18 @@ void integrate3d(Vector<Real>& outdata, AmrData& amrData, Vector<MultiFab*> inda
       Array4<Real> const& inbox  = (*indata[lev]).array(mfi);
       AMREX_PARALLEL_FOR_3D(bx, i, j, k, {
 	  if (inbox(i,j,k,nVars) > 1e-8 &&  (cComp < 0 || (inbox(i,j,k,cComp) >= cMin && inbox(i,j,k,cComp) < cMax))) {
-	    volume += volLev;
-	    for (int n = 0; n < nVars; n++) {
-	      outdata[n] += volLev*inbox(i,j,k,n);
+	    outdata[0] += volLev;
+	    for (int n = 1; n < nVars+1; n++) {
+	      outdata[n] += volLev*inbox(i,j,k,n-1);
 	    }
 	  }
 	});
     }
   }
-  ParallelDescriptor::ReduceRealSum(outdata.data(),nVars);
-  ParallelDescriptor::ReduceRealSum(volume);
+  ParallelDescriptor::ReduceRealSum(outdata.data(),nVars+1);
   if (avg) {
-    for (int n = 0; n<nVars; n++) {
-      outdata[n] /= volume;
+    for (int n = 1; n<nVars+1; n++) {
+      if(outdata[0]> 0.0) outdata[n] /= outdata[0];
     }
   }
   return;
@@ -305,7 +298,6 @@ int main(int argc, char *argv[])
   pp.query("avg",avg); //integral average, or just integral?
   int dir, dir1, dir2;
   std::string format="dat";
-  std::string outfile= infile+"_integral";
   
   Print() << "integralDimension = " << integralDimension << std::endl;
   switch(integralDimension) {
@@ -326,6 +318,13 @@ int main(int argc, char *argv[])
       break;
     }
     //case 3 doesn't care about directions
+  }
+  std::string outfile= infile+"_integral";
+  if(integralDimension < 3) {
+    outfile += "_dir"+std::to_string(dir);
+  }
+  if(!cVar.empty()) {
+    outfile+="_c"+cVar+"_"+std::to_string(cMin)+"_"+std::to_string(cMax);
   }
     
 
@@ -363,7 +362,7 @@ int main(int argc, char *argv[])
       Vector<Real> y(ldir2);
       Vector<Real> tmp1(ldir2,0.0);
       Vector<Vector<Real>> tmp2(ldir1,tmp1);
-      Vector<Vector<Vector<Real>>> outdata(nVars,tmp2);
+      Vector<Vector<Vector<Real>>> outdata(nVars+1,tmp2);
       //do 1d integration
       integrate1d(dir,dir1,dir2,outdata,x,y,amrData,indata,nVars,finestLevel,cComp,cMin,cMax,avg);
       Print() << "Integration completed" << std::endl;
@@ -373,17 +372,19 @@ int main(int argc, char *argv[])
 	if (format == "dat") {
 	  writeDat1D(x,outfile+"_x.dat",ldir1);
 	  writeDat1D(y,outfile+"_y.dat",ldir2);
-	  for (int n = 0; n < nVars; n++) {
-	    writeDat2D(outdata[n],outfile+"_"+vars[n]+".dat",ldir1,ldir2);
+	  writeDat2D(outdata[0],outfile+"_length.dat",ldir1,ldir2);
+	  for (int n = 1; n < nVars+1; n++) {
+	    writeDat2D(outdata[n],outfile+"_"+vars[n-1]+".dat",ldir1,ldir2);
 	  }
 	} else if (format == "ppm") {
 	  int goPastMax = 1;
 	  pp.query("goPastMax",goPastMax);
-	  Vector<Real> vMin(nVars);
-	  Vector<Real> vMax(nVars);
-	  for (int n=0; n<nVars; n++) {
+	  Vector<Real> vMin(nVars+1);
+	  Vector<Real> vMax(nVars+1);
+	  findMinMax(outdata[0],ldir1,ldir2,vMin[0],vMax[0]);
+	  for (int n=1; n<nVars+1; n++) {
 	    char argName[12];
-	    sprintf(argName,"useminmax%i",n+1);
+	    sprintf(argName,"useminmax%i",n);
 	    int nMinMax = pp.countval(argName);
 	    if (nMinMax > 0) {
 	      Print() << "Reading min/max from command line" << std::endl;
@@ -398,8 +399,10 @@ int main(int argc, char *argv[])
 	      findMinMax(outdata[n],ldir1,ldir2,vMin[n],vMax[n]);
 	    }
 	  }
-	  for (int n = 0; n < nVars; n++) { 
-	    writePPM(outdata[n],outfile+"_"+vars[n]+".ppm",ldir1,ldir2,goPastMax,vMin[n],vMax[n]);
+	  
+	  writePPM(outdata[0],outfile+"_length.ppm",ldir1,ldir2,goPastMax,vMin[0],vMax[0]);
+	  for (int n = 1; n < nVars+1; n++) { 
+	    writePPM(outdata[n],outfile+"_"+vars[n-1]+".ppm",ldir1,ldir2,goPastMax,vMin[n],vMax[n]);
 	  }
 	} //can add more formats here if we want - add to assert above
       }
@@ -411,15 +414,16 @@ int main(int argc, char *argv[])
       int ldir = probDomain.length(dir);
       Vector<Real> x(ldir);
       Vector<Real> tmp(ldir,0.0);
-      Vector<Vector<Real>> outdata(nVars,tmp);
+      Vector<Vector<Real>> outdata(nVars+1,tmp);
       integrate2d(dir,dir1,dir2,outdata,x,amrData,indata,nVars,finestLevel,cComp,cMin,cMax,avg);
       Print() << "Integration completed" << std::endl;
       Print() << "Writing data as "+format << std::endl;
       if (ParallelDescriptor::IOProcessor()) {
 	if (format == "dat") {
 	  writeDat1D(x,outfile+"_x.dat",ldir);
-	  for (int n = 0; n < nVars; n++) {
-	    writeDat1D(outdata[n],outfile+"_"+vars[n]+".dat",ldir);
+	  writeDat1D(outdata[0],outfile+"_area.dat",ldir);
+	  for (int n = 1; n < nVars+1; n++) {
+	    writeDat1D(outdata[n],outfile+"_"+vars[n-1]+".dat",ldir);
 	  }
 	} //can add more formats here if we want
       }
@@ -428,13 +432,13 @@ int main(int argc, char *argv[])
   case 3:
     {
       format="dat"; //probably add an option for binary output
-      Vector<Real> outdata(nVars,0.0);
+      Vector<Real> outdata(nVars+1,0.0);
       integrate3d(outdata,amrData,indata,nVars,finestLevel,cComp,cMin,cMax,avg);
       Print() << "Integration completed" << std::endl;
       Print() << "Writing data as "+format << std::endl;
       if (ParallelDescriptor::IOProcessor()) {
 	if (format == "dat") {
-	  writeDat1D(outdata,outfile+"_allVars.dat",nVars);
+	  writeDat1D(outdata,outfile+"_allVars.dat",nVars+1);
 	} //can add more formats here
       }
       break;
