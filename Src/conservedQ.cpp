@@ -63,10 +63,10 @@ main (int   argc,
     int finestLevel = amrData.FinestLevel();
     pp.query("finestLevel",finestLevel);
     int Nlev = finestLevel + 1;
-    Vector<std::string> varNames = {"density","z_velocity","rhoh","temp","Y(H2)","x_velocity","y_velocity"};
+    Vector<std::string> varNames = {"density","z_velocity","rhoh","temp","avg_pressure","Y(H2)","x_velocity","y_velocity"};
 
     const int nCompIn  = varNames.size();
-    int nCompOut = 20;
+    int nCompOut = 21;
     
     Vector<std::string> outNames(nCompOut);
     Vector<std::string> inNames(nCompIn);
@@ -79,26 +79,27 @@ main (int   argc,
     const int iduzlocal = 1; //zvel - keep
     const int idrhohlocal = 2; //rhoh - keep
     const int idtemplocal = 3; //temp - keep
-    const int idh2local = 4; //h2 (just for rhoh2)
-    const int idxvelin = 5; //xvel (just for ur)
-    const int idyvelin = 6; //yvel (just for ur)
+    const int idpressurelocal = 4; //avg_pressure - keep
+    const int idh2in = 5; //h2 (just for rhoh2)
+    const int idxvelin = 6; //xvel (just for ur)
+    const int idyvelin = 7; //yvel (just for ur)
     //out
-    const int idrhouzlocal = 4; // rho*uz
-    const int idrhouzuzlocal = 5; // rho*uz*uz
-    const int idurlocal = 6; // ur
-    const int idrhourlocal = 7; // rho*ur
-    const int idrhoururlocal = 8; // rho*ur*ur
-    const int idrrhouzurlocal = 9; // r*rho*ur*uz
-    const int idrhohuzlocal = 10; //rho*h*uz
-    const int idrhohhlocal = 11; //rho*h*h
-    const int idrrhohurlocal = 12; //r*rho*h*ur
-    const int idtempuzlocal = 13; // T*uz
-    const int idrtempurlocal = 14; //r*T*ur
-    const int idtemptemplocal = 15; // T*T
-    const int idrhoh2local = 16; //rho*h2
-    const int idrhoh2uzlocal = 17; //rho*h2*uz
-    const int idrrhoh2urlocal = 18; //r*rho*h2*ur
-    const int idrhoh2h2local = 19; //rho*h2*h2
+    const int idrhouzlocal = 5; // rho*uz
+    const int idrhouzuzlocal = 6; // rho*uz*uz
+    const int idurlocal = 7; // ur
+    const int idrhourlocal = 8; // rho*ur
+    const int idrhoururlocal = 9; // rho*ur*ur
+    const int idrrhouzurlocal = 10; // r*rho*ur*uz
+    const int idrhohuzlocal = 11; //rho*h*uz
+    const int idrhohhlocal = 12; //rho*h*h
+    const int idrrhohurlocal = 13; //r*rho*h*ur
+    const int idtempuzlocal = 14; // T*uz
+    const int idrtempurlocal = 15; //r*T*ur
+    const int idtemptemplocal = 16; // T*T
+    const int idrhoh2local = 17; //rho*h2
+    const int idrhoh2uzlocal = 18; //rho*h2*uz
+    const int idrrhoh2urlocal = 19; //r*rho*h2*ur
+    const int idrhoh2h2local = 20; //rho*h2*h2
     outNames[idrholocal] = "rho";
     outNames[iduzlocal] = "uz";
     outNames[idrhouzlocal] = "rho.uz";
@@ -119,6 +120,7 @@ main (int   argc,
     outNames[idrhoh2uzlocal] = "rho.h2.uz";
     outNames[idrrhoh2urlocal] = "r.rho.h2.ur";
     outNames[idrhoh2h2local] = "rho.h2.h2";
+    outNames[idpressurelocal] = "pressure";
     Vector<MultiFab*> outdata(Nlev);
     Vector<MultiFab*> indata(Nlev);
     Vector<Geometry> geoms(Nlev);
@@ -165,10 +167,11 @@ main (int   argc,
 	  outbox(i,j,k,idtempuzlocal) = inbox(i,j,k,idtemplocal)*inbox(i,j,k,iduzlocal);
 	  outbox(i,j,k,idrtempurlocal) = r*inbox(i,j,k,idtemplocal)*outbox(i,j,k,idurlocal);
 	  outbox(i,j,k,idtemptemplocal) = inbox(i,j,k,idtemplocal)*inbox(i,j,k,idtemplocal);
-	  outbox(i,j,k,idrhoh2local) = inbox(i,j,k,idrholocal)*inbox(i,j,k,idh2local);
-	  outbox(i,j,k,idrhoh2uzlocal) = inbox(i,j,k,idrholocal)*inbox(i,j,k,idh2local)*inbox(i,j,k,iduzlocal);
+	  outbox(i,j,k,idrhoh2local) = inbox(i,j,k,idrholocal)*inbox(i,j,k,idh2in);
+	  outbox(i,j,k,idrhoh2uzlocal) = inbox(i,j,k,idrholocal)*inbox(i,j,k,idh2in)*inbox(i,j,k,iduzlocal);
 	  outbox(i,j,k,idrrhoh2urlocal) = r*outbox(i,j,k,idrhoh2local)*outbox(i,j,k,idurlocal);
-	  outbox(i,j,k,idrhoh2h2local) = outbox(i,j,k,idrhoh2local)*inbox(i,j,k,idh2local);
+	  outbox(i,j,k,idrhoh2h2local) = outbox(i,j,k,idrhoh2local)*inbox(i,j,k,idh2in);
+	  outbox(i,j,k,idpressurelocal) = inbox(i,j,k,idpressurelocal);
         });
 	
       }
