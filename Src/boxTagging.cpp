@@ -5,6 +5,7 @@
 #include <AMReX_MultiFab.H>
 #include <AMReX_DataServices.H>
 #include <AMReX_PlotFileUtil.H>
+#include <AMReX_MultiFabUtil.H>
 
 using namespace amrex;
 
@@ -51,6 +52,7 @@ main (int   argc,
     std::string outfile;
     pp.get("outfile",outfile);
 
+    int avgDown = 0; pp.query("avgDown",avgDown);
     DataServices::SetBatchMode();
     Amrvis::FileType fileType(Amrvis::NEWPLT);
 
@@ -85,10 +87,8 @@ main (int   argc,
     int Nlev = finestLevel + 1;
     pp.query("finestLevel",finestLevel);
     Nlev = std::max(0, std::min(Nlev, finestLevel+1));
-
     int max_grid_size = 8;
-    pp.query("max_grid_size",max_grid_size);
-    Vector<MultiFab*> smallBoxes(Nlev);
+    //pp.query("max_grid_size",max_grid_size);
     Vector<MultiFab*> fileData(Nlev);
     int nGrowC = 1;
     int nGrowE = 1;
@@ -98,31 +98,25 @@ main (int   argc,
     Vector<int> nGrowELev(Nlev);
     Vector<int> nGrowCLev(Nlev);
     for (int lev=0; lev<Nlev; ++lev) {
-        BoxArray newba = amrData.boxArray(lev);
-        //newba.maxSize(max_grid_size);
-        const DistributionMapping dm(newba);
-	int nGrow = std::max(nGrowC,nGrowE)*std::pow(2,lev);
-	nGrowELev[lev] = nGrowE*std::pow(2,lev);
-	nGrowCLev[lev] = nGrowC*std::pow(2,lev);
-	smallBoxes[lev] = new MultiFab(newba,dm,3,nGrow);
-    }
-    if (ParallelDescriptor::IOProcessor())
-        std::cerr << "Full MultiFab allocated (with small boxes) " << std::endl;
-
-    for (int lev=0; lev<Nlev; ++lev)
-    {
+      BoxArray newba = amrData.boxArray(lev);
       
-      smallBoxes[lev]->copy(amrData.GetGrids(lev,RRcomp),0,0,1);
-      smallBoxes[lev]->copy(amrData.GetGrids(lev,Tcomp),0,1,1);
+      const DistributionMapping dm(newba);
+      int nGrow = std::max(nGrowC,nGrowE)*std::pow(2,lev);
+      nGrowELev[lev] = nGrowE*std::pow(2,lev);
+      nGrowCLev[lev] = nGrowC*std::pow(2,lev);
+      fileData[lev] = new MultiFab(newba,dm,3,nGrow);
+      
+      fileData[lev]->copy(amrData.GetGrids(lev,RRcomp),0,0,1);
+      fileData[lev]->copy(amrData.GetGrids(lev,Tcomp),0,1,1);
       /*(if (lev == finestLevel) {
 	smallBoxes[lev]->setVal(3,2,1);
       } else {
       */
-      smallBoxes[lev]->setVal(-1,2,1);
+      fileData[lev]->setVal(-1,2,1);
       Vector<Real> dx = amrData.DxLevel()[lev];
-      for (MFIter mfi(*smallBoxes[lev],TilingIfNotGPU()); mfi.isValid(); ++mfi) {
+      for (MFIter mfi(*fileData[lev],TilingIfNotGPU()); mfi.isValid(); ++mfi) {
 	const Box& bx = mfi.tilebox();
-	Array4<Real> const& varsIn = smallBoxes[lev]->array(mfi);
+	Array4<Real> const& varsIn = fileData[lev]->array(mfi);
 	
 	AMREX_PARALLEL_FOR_3D (bx,i,j,k, {
 	    if(varsIn(i,j,k,2) < 0) {
@@ -156,23 +150,13 @@ main (int   argc,
     }
     if (ParallelDescriptor::IOProcessor())
         std::cerr << "Set zones" << std::endl;
-    
-    for (int lev=0; lev<Nlev; ++lev) {
-        BoxArray newba = amrData.boxArray(lev);
-        const DistributionMapping dm(newba);
-        fileData[lev] = new MultiFab(newba,dm,1,0);
-	fileData[lev]->copy(*smallBoxes[lev],2,0,1);            
-    }
-    if (ParallelDescriptor::IOProcessor())
-        std::cerr << "Copied back to original BA" << std::endl;
-    
-     //recast?
+        
+    //recast?
     Vector<std::string> names(1);
     names[0] = "zone";
     Vector<Geometry> geoms(Nlev);
     Vector<int> levelSteps(Nlev);
-    Vector<IntVect> refRatio(Nlev-1);
-    Vector<const MultiFab*> dat(Nlev);
+    Vector<IntVect> refRatios(Nlev-1);
 
     RealBox rb(&(amrData.ProbLo()[0]),
                &(amrData.ProbHi()[0]));
@@ -183,15 +167,26 @@ main (int   argc,
     for (int lev=0; lev<Nlev; ++lev)
     {
       geoms[lev] = Geometry(amrData.ProbDomain()[lev],&rb,coord,&(is_per[0]));
-      levelSteps[lev] = 666;
       if (lev < Nlev-1) {
         int r = amrData.RefRatio()[lev];
-        refRatio[lev] = IntVect(D_DECL(r,r,r));
+        refRatios[lev] = IntVect(D_DECL(r,r,r));
       }
-      dat[lev] = fileData[lev];
     }
-    
-    WriteMultiLevelPlotfile(outfile,Nlev,dat,names,geoms,amrData.Time(),levelSteps,refRatio);
+    if (avgDown) {
+      Print() << "Averaging down to coarse and writing to "+outfile << std::endl;
+      for (int lev = finestLevel; lev > 0; --lev) {
+	MultiFab* fineMF = fileData[lev];
+	MultiFab* coarseMF = fileData[lev-1];
+	amrex::average_down(*fineMF,*coarseMF,0,1,refRatios[lev-1]);
+      }
+      amrex::WriteSingleLevelPlotfile(outfile,*fileData[0],names,geoms[0],0.0,0);
+    } else {
+      Print() << "Writing to " + outfile << std::endl;
+      Vector<int> isteps(Nlev, 0);
+      amrex::WriteMultiLevelPlotfile(outfile,Nlev,GetVecOfConstPtrs(fileData),names,geoms, 0.0, isteps, refRatios);
+    }
+
+    //WriteMultiLevelPlotfile(outfile,Nlev,dat,names,geoms,amrData.Time(),levelSteps,refRatio);
     }
     amrex::Finalize();
     return 0;
