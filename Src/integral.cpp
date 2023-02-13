@@ -326,6 +326,9 @@ int main(int argc, char *argv[])
   if(!cVar.empty()) {
     outfile+="_c"+cVar+"_"+std::to_string(cMin)+"_"+std::to_string(cMax);
   }
+  if(avg) {
+    outfile+= "_avg";
+  }
     
 
   Vector<MultiFab*> indata(Nlev);
@@ -421,10 +424,11 @@ int main(int argc, char *argv[])
       if (ParallelDescriptor::IOProcessor()) {
 	if (format == "dat") {
 	  writeDat1D(x,outfile+"_x.dat",ldir);
-	  writeDat1D(outdata[0],outfile+"_area.dat",ldir);
-	  for (int n = 1; n < nVars+1; n++) {
-	    writeDat1D(outdata[n],outfile+"_"+vars[n-1]+".dat",ldir);
-	  }
+	  writeDat2D(outdata,outfile+"_allVars.dat",nVars+1,ldir);
+	  //writeDat1D(outdata[0],outfile+"_area.dat",ldir);
+	  //for (int n = 1; n < nVars+1; n++) {
+	  //  writeDat1D(outdata[n],outfile+"_"+vars[n-1]+".dat",ldir);
+	  //}
 	} //can add more formats here if we want
       }
       break;
