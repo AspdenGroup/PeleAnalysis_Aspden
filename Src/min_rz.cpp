@@ -23,7 +23,7 @@ void minTheta(int dirx, int diry, int dirz, Vector<Vector<Vector<Real>>>& outdat
     Real dxLev = amrData.DxLevel()[lev][dirx];
     Real dyLev = amrData.DxLevel()[lev][diry];
     if (lev < finestLevel) refRatio *= amrData.RefRatio()[lev];
-    Print() << "Integrating level "<< lev << std::endl;
+    Print() << "Min-ing on level "<< lev << std::endl;
     for (MFIter mfi(*indata[lev]); mfi.isValid(); ++mfi) {
       const Box& bx = mfi.tilebox();
       Array4<Real> const& inbox  = (*indata[lev]).array(mfi);
@@ -31,17 +31,17 @@ void minTheta(int dirx, int diry, int dirz, Vector<Vector<Vector<Real>>>& outdat
 	  if (inbox(i,j,k,nVars) > 1e-8 && (cComp < 0 || (inbox(i,j,k,cComp) >= cMin && inbox(i,j,k,cComp) < cMax))) {	    
 	    Real xlo = plo[0] + i*dxLev;
 	    Real ylo = plo[1] + j*dyLev;
-	    for (int bx = 0; bx < bandingFactor; bx++) {
-	      for(int by = 0; by < bandingFactor; by++) {
-		Real x = xlo + ((bx+0.5)*dxLev)/(Real)bandingFactor;
-		Real y = ylo + ((by+0.5)*dyLev)/(Real)bandingFactor;
-		Real r = std::sqrt(x*x + y*y);	     
-		int ridx = (int)(r/dxLev);
+	    for (int bfx = 0; bfx < bandingFactor; bfx++) {
+	      for(int bfy = 0; bfy < bandingFactor; bfy++) {
+		Real x = xlo + ((bfx+0.5)*dxLev)/(Real)bandingFactor;
+		Real y = ylo + ((bfy+0.5)*dyLev)/(Real)bandingFactor;
+		Real radius = std::sqrt(x*x + y*y);	     
+		int ridx = (int)(radius/dxLev);
 		if (ridx < ldirr) {
 		  for (int rx = 0; rx < refRatio; rx++) {
 		    for (int ry = 0; ry < refRatio; ry++) {
 		      for (int n = 0; n < nVars; n++) {
-			outdata[n][refRatio*ridx+rx][refRatio*k+ry] = std::min(outdata[n][refRatio*ridx+rx][refRatio*k+ry],inbox(i,j,k,n-1));
+			outdata[n][refRatio*ridx+rx][refRatio*k+ry] = std::min(outdata[n][refRatio*ridx+rx][refRatio*k+ry],inbox(i,j,k,n));
 		      }
 		    }
 		  }
@@ -55,7 +55,7 @@ void minTheta(int dirx, int diry, int dirz, Vector<Vector<Vector<Real>>>& outdat
     }
   }
   for (int i = 0; i < ldirr; i++) {
-    for (int n = 0; n<nVars+1; n++) {
+    for (int n = 0; n<nVars; n++) {
       ParallelDescriptor::ReduceRealMin(outdata[n][i].data(),ldirz);
     }
   }
@@ -255,7 +255,7 @@ int main(int argc, char *argv[])
     int ldirz = probDomain.length(dirz);
     Vector<Real> r(ldirr);
     Vector<Real> z(ldirz);
-    Vector<Real> tmp1(ldirz,0.0);
+    Vector<Real> tmp1(ldirz,1e10);
     Vector<Vector<Real>> tmp2(ldirr,tmp1);
     Vector<Vector<Vector<Real>>> outdata(nVars,tmp2);
     //do min
@@ -268,7 +268,7 @@ int main(int argc, char *argv[])
 	writeDat1D(r,outfile+"_r.dat",ldirr);
 	writeDat1D(z,outfile+"_z.dat",ldirz);
 	for (int n = 0; n < nVars; n++) {
-	  writeDat2D(outdata[n],outfile+"_"+vars[n-1]+".dat",ldirr,ldirz);
+	  writeDat2D(outdata[n],outfile+"_"+vars[n]+".dat",ldirr,ldirz);
 	}
       } else if (format == "ppm") {
 	int goPastMax = 1;
