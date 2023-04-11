@@ -9,7 +9,7 @@
 #include <AMReX_BLFort.H>
 
 using namespace amrex;
-
+#if AMREX_SPACEDIM==3
 void integrate1d(int dir, int dir1, int dir2, Vector<Vector<Vector<Real>>>& outdata, Vector<Real>& x, Vector<Real>& y, AmrData& amrData, Vector<MultiFab*> indata, int nVars, int finestLevel, int cComp, Real cMin, Real cMax, int avg) {
 
   Box probDomain = amrData.ProbDomain()[finestLevel];
@@ -147,6 +147,81 @@ void integrate3d(Vector<Real>& outdata, AmrData& amrData, Vector<MultiFab*> inda
   }
   return;
 }
+#elif AMREX_SPACEDIM==2
+void integrate1d(int dirInt, int dir, Vector<Vector<Real>>& outdata, Vector<Real>& x, AmrData& amrData, Vector<MultiFab*> indata,int nVars, int finestLevel, int cComp, Real cMin, Real cMax, int avg) {
+  Box probDomain = amrData.ProbDomain()[finestLevel];
+  int ldir = probDomain.length(dir);
+  IntVect d;
+  int refRatio = 1;
+  for (int lev = finestLevel; lev >= 0; lev--) {
+    Real dxLev = amrData.DxLevel()[lev][dirInt];
+    if (lev < finestLevel) refRatio *= amrData.RefRatio()[lev];
+    Print() << "Integrating level "<< lev << std::endl;
+    for (MFIter mfi(*indata[lev]); mfi.isValid(); ++mfi) {
+      const Box& bx = mfi.tilebox();
+      Array4<Real> const& inbox  = (*indata[lev]).array(mfi);
+      AMREX_PARALLEL_FOR_3D(bx, i, j, k, {
+	  if (inbox(i,j,k,nVars) > 1e-8 &&  (cComp < 0 || (inbox(i,j,k,cComp) >= cMin && inbox(i,j,k,cComp) < cMax))) {
+	    d[0] = i;
+	    d[1] = j;
+	    d[2] = k;
+	    for (int rx = 0; rx < refRatio; rx++) {
+	      outdata[0][refRatio*d[dir]+rx] += dxLev;
+	      for (int n = 1; n < nVars+1; n++) {
+		outdata[n][refRatio*d[dir]+rx] += dxLev*inbox(i,j,k,n-1);
+	      }
+	    }
+	  }
+	});
+    }
+  }
+  for (int n = 0; n < nVars+1; n++) {
+    ParallelDescriptor::ReduceRealSum(outdata[n].data(),ldir);
+  }
+  Real dyFine = amrData.DxLevel()[finestLevel][dir];
+  if (avg) {
+    for (int n = 1; n<nVars+1; n++) {
+      for (int i = 0; i < ldir; i++) {
+	if (outdata[0][i] > 0.0) outdata[n][i] /=  outdata[0][i];
+      }
+    }
+  }
+  Vector<Real> plo = amrData.ProbLo();
+  Vector<Real> phi = amrData.ProbHi();
+  for (int i = 0; i < ldir; i++) {
+    x[i] = plo[dir] + (i+0.5)*dyFine;
+  }
+  return;
+}
+  
+void integrate2d(Vector<Real>& outdata, AmrData& amrData, Vector<MultiFab*> indata, int nVars, int finestLevel, int cComp, Real cMin, Real cMax, int avg) {
+  for (int lev = 0; lev <= finestLevel; lev++) {
+    Real dxLev = amrData.DxLevel()[lev][0];
+    Real dyLev = amrData.DxLevel()[lev][1];
+    Real areaLev = dxLev*dyLev;
+    Print() << "Integrating level "<< lev << std::endl;
+    for (MFIter mfi(*indata[lev]); mfi.isValid(); ++mfi) {
+      const Box& bx = mfi.tilebox();
+      Array4<Real> const& inbox  = (*indata[lev]).array(mfi);
+      AMREX_PARALLEL_FOR_3D(bx, i, j, k, {
+	  if (inbox(i,j,k,nVars) > 1e-8 &&  (cComp < 0 || (inbox(i,j,k,cComp) >= cMin && inbox(i,j,k,cComp) < cMax))) {
+	    outdata[0] += areaLev;
+	    for (int n = 1; n < nVars+1; n++) {
+	      outdata[n] += areaLev*inbox(i,j,k,n-1);
+	    }
+	  }
+	});
+    }
+  }
+  ParallelDescriptor::ReduceRealSum(outdata.data(),nVars+1);
+  if (avg) {
+    for (int n = 1; n<nVars+1; n++) {
+      if(outdata[0]> 0.0) outdata[n] /= outdata[0];
+    }
+  }
+  return;
+}
+#endif
 
 void writeDat1D(Vector<Real> vect, std::string filename, int dim) {
   FILE *file = fopen(filename.c_str(),"w");
@@ -273,7 +348,7 @@ int main(int argc, char *argv[])
   
   int integralDimension;
   pp.get("integralDimension",integralDimension);
-  //AMREX_ALWAYS_ASSERT(integralDimension<=3);
+  AMREX_ALWAYS_ASSERT(integralDimension<=AMREX_SPACEDIM);
   int finestLevel = amrData.FinestLevel();
   pp.query("finestLevel", finestLevel);
   int Nlev = finestLevel + 1;
@@ -300,6 +375,7 @@ int main(int argc, char *argv[])
   std::string format="dat";
   
   Print() << "integralDimension = " << integralDimension << std::endl;
+#if AMREX_SPACEDIM==3
   switch(integralDimension) {
   case 1:
     {
@@ -319,8 +395,12 @@ int main(int argc, char *argv[])
     }
     //case 3 doesn't care about directions
   }
+#elif AMREX_SPACEDIM==2
+  pp.get("dir",dir);
+  dir1 = (dir+1)%2;
+#endif
   std::string outfile= infile+"_integral";
-  if(integralDimension < 3) {
+  if(integralDimension < AMREX_SPACEDIM) {
     outfile += "_dir"+std::to_string(dir);
   }
   if(!cVar.empty()) {
@@ -354,7 +434,7 @@ int main(int argc, char *argv[])
     }
   }
   Print() << "Intersects determined" << std::endl;
-  
+#if AMREX_SPACEDIM==3  
   switch(integralDimension) {
   case 1: //1D integral, results in 2D data (assuming 3D plotfile), output either dat or ppm
     {
@@ -448,7 +528,44 @@ int main(int argc, char *argv[])
       break;
     }
   }
+#elif AMREX_SPACEDIM==2
+  switch(integralDimension) {
+  case 1:
+    {
+      Box probDomain = amrData.ProbDomain()[finestLevel];
+      int ldir = probDomain.length(dir1);
+      Vector<Real> x(ldir);
+      Vector<Real> tmp(ldir,0.0);
+      Vector<Vector<Real>> outdata(nVars+1,tmp);
+      integrate1d(dir,dir1,outdata,x,amrData,indata,nVars,finestLevel,cComp,cMin,cMax,avg);
+      Print() << "Integration completed" << std::endl;
+      Print() << "Writing data as "+format << std::endl;
+      if (ParallelDescriptor::IOProcessor()) {
+	if (format == "dat") {
+	  writeDat1D(x,outfile+"_x.dat",ldir);
+	  writeDat2D(outdata,outfile+"_allVars.dat",nVars+1,ldir);
+	} //can add more formats here if we want
+      }
+      break;
+    }
+  case 2:
+    {
+      format="dat"; //probably add an option for binary output
+      Vector<Real> outdata(nVars+1,0.0);
+      integrate2d(outdata,amrData,indata,nVars,finestLevel,cComp,cMin,cMax,avg);
+      Print() << "Integration completed" << std::endl;
+      Print() << "Writing data as "+format << std::endl;
+      if (ParallelDescriptor::IOProcessor()) {
+	if (format == "dat") {
+	  writeDat1D(outdata,outfile+"_allVars.dat",nVars+1);
+	} //can add more formats here
+      }
+      break;
+    }
   }
+#endif
+  }
+
   Finalize();
   return 0;  
 }
