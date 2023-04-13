@@ -92,7 +92,7 @@ main (int   argc,
     const int idrhouzurlocal = 10; // rho*ur*uz
     const int idrhohuzlocal = 11; //rho*h*uz
     const int idrhohhlocal = 12; //rho*h*h
-    const int idrrhohurlocal = 13; //r*rho*h*ur
+    const int idrhohurlocal = 13; //rho*h*ur
     const int idtempuzlocal = 14; // T*uz
     const int idtempurlocal = 15; //T*ur
     const int idtemptemplocal = 16; // T*T
@@ -161,11 +161,11 @@ main (int   argc,
 	  outbox(i,j,k,idrhoururlocal) = inbox(i,j,k,idrholocal)*outbox(i,j,k,idurlocal)*outbox(i,j,k,idurlocal);
 	  outbox(i,j,k,idrhohlocal) = inbox(i,j,k,idrhohlocal);
 	  outbox(i,j,k,idrhohuzlocal) = inbox(i,j,k,idrhohlocal)*inbox(i,j,k,iduzlocal);
-	  outbox(i,j,k,idrhohurlocal) = r*inbox(i,j,k,idrhohlocal)*outbox(i,j,k,idurlocal);
+	  outbox(i,j,k,idrhohurlocal) = inbox(i,j,k,idrhohlocal)*outbox(i,j,k,idurlocal);
 	  outbox(i,j,k,idrhohhlocal) = inbox(i,j,k,idrhohlocal)*inbox(i,j,k,idrhohlocal)/inbox(i,j,k,idrholocal);
 	  outbox(i,j,k,idtemplocal) = inbox(i,j,k,idtemplocal);
 	  outbox(i,j,k,idtempuzlocal) = inbox(i,j,k,idtemplocal)*inbox(i,j,k,iduzlocal);
-	  outbox(i,j,k,idrtempurlocal) = inbox(i,j,k,idtemplocal)*outbox(i,j,k,idurlocal);
+	  outbox(i,j,k,idtempurlocal) = inbox(i,j,k,idtemplocal)*outbox(i,j,k,idurlocal);
 	  outbox(i,j,k,idtemptemplocal) = inbox(i,j,k,idtemplocal)*inbox(i,j,k,idtemplocal);
 	  outbox(i,j,k,idrhoh2local) = inbox(i,j,k,idrholocal)*inbox(i,j,k,idh2in);
 	  outbox(i,j,k,idrhoh2uzlocal) = inbox(i,j,k,idrholocal)*inbox(i,j,k,idh2in)*inbox(i,j,k,iduzlocal);
