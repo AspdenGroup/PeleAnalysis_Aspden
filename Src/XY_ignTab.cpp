@@ -20,7 +20,7 @@ Real interpolate(Real x, Real y, Real dx, Real dy, Vector<Vector<Real>> idttab) 
   int yloidx = (int)yloc;
   int tabxsize = idttab.size();
   int tabysize = idttab[0].size();
-  if (xloidx < 0 || xloidx+1> tabxsize || yloidx < 0 || yloidx+1 > tabysize) {
+  if (xloidx < 0 || xloidx+1 > tabxsize || yloidx < 0 || yloidx+1 > tabysize) {
     return 0.0;
   }
   else {
@@ -83,7 +83,7 @@ main (int   argc,
     int finestLevel = amrData.FinestLevel();
     pp.query("finestLevel",finestLevel);
     int Nlev = finestLevel + 1;
-    Vector<std::string> varNames={"Y(H2)","temp"};
+    Vector<std::string> varNames={"Y(H2)","Y(H2O)"};
     
     const int nCompIn  = 2;
     const int nCompOut = 4;
@@ -133,12 +133,13 @@ main (int   argc,
 	}
       }
     }
-
-    Real Tair, Tfuel, Tb;
-    pp.get("Tfuel",Tfuel);
-    pp.get("Tair",Tair);
-    pp.get("Tb",Tb);
-
+    
+    //Real Tair, Tfuel, Tb;
+    //pp.get("Tfuel",Tfuel);
+    //pp.get("Tair",Tair);
+    //pp.get("Tb",Tb);
+    Real H2Ob;
+    pp.get("H2Ob");
     Vector<std::unique_ptr<MultiFab>> outdata(Nlev);
     Vector<Geometry> geoms(Nlev);
     const int nGrow = 0;
@@ -168,7 +169,7 @@ main (int   argc,
         AMREX_PARALLEL_FOR_3D ( bx, i, j, k,
         {	  
 	  Real x = inbox(i,j,k,0);
-	  Real y = (inbox(i,j,k,1)-Tair+(Tair-Tfuel)*inbox(i,j,k,0))/(Tb-Tair);
+	  Real y = inbox(i,j,k,1)/H2Ob;//(inbox(i,j,k,1)-Tair+(Tair-Tfuel)*inbox(i,j,k,0))/(Tb-Tair);
 	  outbox(i,j,k,0) = x;
 	  outbox(i,j,k,1) = y;
 	  Real idt = interpolate(x,y,dx,dy,idttab);
