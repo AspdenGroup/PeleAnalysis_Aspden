@@ -54,7 +54,8 @@ main (int   argc,
     Real Y_O_air = 0.233; pp.query("YO2Air",Y_O_air);
     Real S = s/Y_O_air;
     const Real Z_st = Y_O_air/(s+Y_O_air);
-    Real Tmin = 300; pp.query("Tmin",Tmin);
+    std::string productName = "H2O"; pp.query("productName",productName);
+    int clipProgress = 0; pp.query("clipProgress",clipProgress);
     Vector<int> is_per(BL_SPACEDIM,1);
     pp.queryarr("is_per",is_per,0,BL_SPACEDIM);
     DataServices::SetBatchMode();
@@ -67,42 +68,33 @@ main (int   argc,
     }
     AmrData& amrData = dataServices.AmrDataRef();
 
-    //init_mech();
-
     int finestLevel = amrData.FinestLevel();
     pp.query("finestLevel",finestLevel);
     int Nlev = finestLevel + 1;
     
-    int idFCRin = -1;
+    int idFPRin = -1;
     int idFin = -1;
     int idOin = -1;
-    int idRhoin = -1;
-    int idTin = -1;
-    int idVortin = -1;
-    int idProdin = -1;
-    //Vector<std::string> spec_names = GetSpecNames();
+    int idPin = -1;
+    int idPPRin = -1;
     const Vector<std::string>& plotVarNames = amrData.PlotVarNames();
-    const std::string FCRName = "I_R("+fuelName+")";//"_ConsumptionRate";
+    const std::string FPRName = "I_R("+fuelName+")";
     const std::string spName= "Y("+fuelName+")";
     const std::string oxName= "Y(O2)";
-    const std::string prodName= "Y(H2O)";
-    const std::string rhoName = "density";
-    const std::string tName = "temp";
-    const std::string vortName = "mag_vort";
+    const std::string prodName= "Y("+productName+")";
+    const std::string PPRName = "I_R("+productName+")";
     for (int i=0; i<plotVarNames.size(); ++i)
     {
-      if (plotVarNames[i] == FCRName) idFCRin = i;
+      if (plotVarNames[i] == FPRName) idFPRin = i;
       if (plotVarNames[i] == spName) idFin = i;
       if (plotVarNames[i] == oxName) idOin = i;
-      if (plotVarNames[i] == rhoName) idRhoin = i;
-      if (plotVarNames[i] == tName) idTin = i;
-      if (plotVarNames[i] == vortName) idVortin = i;
-      if (plotVarNames[i] == prodName) idProdin = i;
+      if (plotVarNames[i] == prodName) idPin = i;
+      if (plotVarNames[i] == PPRName) idPPRin = i;
     }
-    if (idFin<0 || idOin<0 ||  idRhoin < 0 || idTin < 0 || idFCRin < 0 || idVortin < 0 || idProdin < 0)
+    if (idFin<0 || idOin<0 || idFPRin < 0 || idPPRin < 0 || idPin < 0)
       Abort("Cannot find required data in pltfile");
-    const int nCompIn  = 3;
-    int nCompOut = 3;
+    const int nCompIn  = 5;
+    int nCompOut = 7;
     
     Vector<std::string> outNames(nCompOut);
     Vector<std::string> inNames(nCompIn);
@@ -110,52 +102,39 @@ main (int   argc,
     //in
     const int idFlocal = 0; // fuel in here
     const int idOlocal = 1; // O2 in here
-    //const int idRholocal = 2; // density in here
-    //const int idFCRlocal = 2; //FCR in here
-    const int idTlocal = 2; //Temp in here
-    //const int idVortlocal = 5;
-    //const int idProdlocal = 6;
+    const int idPlocal = 2; //product in here
+    const int idFPRlocal = 3; //FCR in here
+    const int idPPRlocal = 4; //Temp in here
     //out
-    //const int idZFOlocal = 0; // Z out here
-    //const int idZFPlocal = 1; // Z out here
-    //const int idZOPlocal = 2; // Z out here
     const int idZlocal = 0; // Z out here
-    const int idClocal = 1;//3; // C out here
-    //const int idCsourcelocal = 2;//4; //C source here
-    //const int idDalocal = 3;//5;
-    const int idfuelTempProductlocal = 2;//6;
-    //const int idPhilocal = 4;
-    destFillComps[idFlocal] = idFlocal;
-    destFillComps[idOlocal] = idOlocal;
-    //destFillComps[idRholocal] = idRholocal;
-    //destFillComps[idFCRlocal] = idFCRlocal;
-    destFillComps[idTlocal] = idTlocal;
-    //destFillComps[idVortlocal] = idVortlocal;
-    //destFillComps[idProdlocal] = idProdlocal;
+    const int idCFlocal = 1; // CF out here
+    const int idCPlocal = 2; // CP out here
+    const int idCFsourcelocal = 3; //CF source here
+    const int idCPsourcelocal = 4; //CP source here
+    const int idCFCPlocal = 5; //(1-CF)*CP
+    const int idCPCFlocal = 6; //(1-CP)*CF
+    
+    for (int i = 0; i < nCompIn; i++) {
+      destFillComps[i] = i;
+    }
     inNames[idFlocal] = spName;
     inNames[idOlocal] =  oxName;
-    //inNames[idRholocal] = rhoName;
-    //inNames[idFCRlocal] = FCRName;
-    inNames[idTlocal] = tName;
-    //inNames[idVortlocal] = vortName;
-    //inNames[idProdlocal] = prodName;
+    inNames[idFPRlocal] = FPRName;
+    inNames[idPPRlocal] = PPRName;
+    inNames[idPlocal] = prodName;
     outNames[idZlocal] = "mixture_fraction";
-    //outNames[idZFPlocal] = "mixture_fraction_FP";
-    //outNames[idZOPlocal] = "mixture_fraction_OP";
-    outNames[idClocal] = "progress_variable";
-    //outNames[idCsourcelocal] = "progress_variable_source";
-    //outNames[idDalocal] = "log(Da)";
-    outNames[idfuelTempProductlocal] = "fuel * temp";
-    Real TempIgn = 800; pp.query("IgnitionTemp",TempIgn);
-    Real fuelNorm = 1; pp.query("fuelNormalise",fuelNorm);
-    Real tempNorm = 1500; pp.query("tempNormalise",tempNorm);
-    //outNames[idPhilocal] = "phi";
+    outNames[idCFlocal] = "progress_variable_F";
+    outNames[idCPlocal] = "progress_variable_P";
+    outNames[idCFsourcelocal] = "progress_variable_F_source";
+    outNames[idCPsourcelocal] = "progress_variable_P_source";
+    outNames[idCFCPlocal] = "CP-CPCF";
+    outNames[idCPCFlocal] = "CF-CPCF";
     Vector<std::unique_ptr<MultiFab>> outdata(Nlev);
     Vector<MultiFab*> indata(Nlev);
     Vector<Geometry> geoms(Nlev);
     RealBox rb(&(amrData.ProbLo()[0]),&(amrData.ProbHi()[0]));
     const int nGrow = 1;
-    Real eps = 1e-8;
+    	  
     for (int lev=0; lev<Nlev; ++lev)
     {
       const BoxArray ba = amrData.boxArray(lev);
@@ -176,20 +155,27 @@ main (int   argc,
         Array4<Real> const& ZC = (*outdata[lev]).array(mfi);
         AMREX_PARALLEL_FOR_3D ( bx, i, j, k,
         {
+	  Real CPfactor = Z_st+Y_O_air*(1-Z_st);
 	  ZC(i,j,k,idZlocal) = (s*inbox(i,j,k,idFlocal) - inbox(i,j,k,idOlocal) + Y_O_air)/(s+Y_O_air);
-	  if (ZC(i,j,k,idZlocal) <= Z_st)
-	    {
-	      ZC(i,j,k,idClocal) = 1-inbox(i,j,k,idFlocal)/ZC(i,j,k,idZlocal);
-	      //ZC(i,j,k,idCsourcelocal) = -inbox(i,j,k,idFCRlocal)/ZC(i,j,k,idZlocal);
-	    } else
-	    {
-	      ZC(i,j,k,idClocal) = ((1-Z_st)/Z_st)*(ZC(i,j,k,idZlocal)-inbox(i,j,k,idFlocal))/(1-ZC(i,j,k,idZlocal));
-	      //ZC(i,j,k,idCsourcelocal) = -((1-Z_st)/Z_st)*inbox(i,j,k,idFCRlocal)/(1-ZC(i,j,k,idZlocal));
-	    }
-	  ZC(i,j,k,idClocal) = std::max(0.0,ZC(i,j,k,idClocal));
-	  ZC(i,j,k,idClocal) = std::min(1.0,ZC(i,j,k,idClocal));
-	  //ZC(i,j,k,idDalocal) = std::log10(std::max(ZC(i,j,k,idCsourcelocal)/(inbox(i,j,k,idRholocal)*inbox(i,j,k,idVortlocal)),1e-10));
-	  ZC(i,j,k,idfuelTempProductlocal) = inbox(i,j,k,idFlocal)*inbox(i,j,k,idTlocal);
+	  if (ZC(i,j,k,idZlocal) <= Z_st){
+	      ZC(i,j,k,idCFlocal) = 1-inbox(i,j,k,idFlocal)/ZC(i,j,k,idZlocal);
+	      ZC(i,j,k,idCFsourcelocal) = -inbox(i,j,k,idFPRlocal)/ZC(i,j,k,idZlocal);
+	      CPfactor *= ZC(i,j,k,idZlocal)/Z_st;
+	  } else {
+	      ZC(i,j,k,idCFlocal) = ((1-Z_st)/Z_st)*(ZC(i,j,k,idZlocal)-inbox(i,j,k,idFlocal))/(1-ZC(i,j,k,idZlocal));
+	      ZC(i,j,k,idCFsourcelocal) = -((1-Z_st)/Z_st)*inbox(i,j,k,idFPRlocal)/(1-ZC(i,j,k,idZlocal));
+	      CPfactor *= (1-ZC(i,j,k,idZlocal))/(1-Z_st);
+	  }
+	  ZC(i,j,k,idCPlocal) = inbox(i,j,k,idPlocal)/CPfactor;
+	  ZC(i,j,k,idCFsourcelocal) = inbox(i,j,k,idPPRlocal)/CPfactor;
+	  if (clipProgress){ 
+	    ZC(i,j,k,idCFlocal) = std::max(0.0,ZC(i,j,k,idCFlocal));
+	    ZC(i,j,k,idCFlocal) = std::min(1.0,ZC(i,j,k,idCFlocal));
+	    ZC(i,j,k,idCPlocal) = std::max(0.0,ZC(i,j,k,idCPlocal));
+	    ZC(i,j,k,idCPlocal) = std::min(1.0,ZC(i,j,k,idCPlocal));
+	  }
+	  ZC(i,j,k,idCFCPlocal) = (1-ZC(i,j,k,idCFlocal))*ZC(i,j,k,idCPlocal);
+	  ZC(i,j,k,idCPCFlocal) = (1-ZC(i,j,k,idCPlocal))*ZC(i,j,k,idCFlocal);
         });
 	
       }
