@@ -138,8 +138,9 @@ main (int   argc,
     //pp.get("Tfuel",Tfuel);
     //pp.get("Tair",Tair);
     //pp.get("Tb",Tb);
-    Real H2Ob;
-    pp.get("H2Ob");
+    Real H2Ob, H2u;
+    pp.get("H2Ob",H2Ob);
+    pp.get("H2u",H2u)
     Vector<std::unique_ptr<MultiFab>> outdata(Nlev);
     Vector<Geometry> geoms(Nlev);
     const int nGrow = 0;
@@ -168,7 +169,7 @@ main (int   argc,
 
         AMREX_PARALLEL_FOR_3D ( bx, i, j, k,
         {	  
-	  Real x = inbox(i,j,k,0);
+	  Real x = inbox(i,j,k,0)/H2u;
 	  Real y = inbox(i,j,k,1)/H2Ob;//(inbox(i,j,k,1)-Tair+(Tair-Tfuel)*inbox(i,j,k,0))/(Tb-Tair);
 	  outbox(i,j,k,0) = x;
 	  outbox(i,j,k,1) = y;
