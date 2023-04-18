@@ -27,13 +27,11 @@ void maxTheta(int dirx, int diry, int dirz, Vector<Vector<Vector<Real>>>& outdat
       Array4<Real> const& inbox  = (*indata[lev]).array(mfi);
       AMREX_PARALLEL_FOR_3D(bx, i, j, k, {
 	  if (inbox(i,j,k,nVars) > 1e-8 && (cComp < 0 || (inbox(i,j,k,cComp) >= cMin && inbox(i,j,k,cComp) < cMax))) {	    
-	    Real xlo = plo[0] + i*dxLev;
-	    Real ylo = plo[1] + j*dyLev;
-	    Real x = xlo + 0.5*dxLev;
-	    Real y = ylo + 0.5*dyLev;
+	    Real x = plo[0]+(i+0.5)*dxLev;
+	    Real y = plo[1]+(j+0.5)*dyLev;
 	    Real radius = std::sqrt(x*x + y*y);	     
 	    int ridx = (int)(radius/dxLev);
-	    if (ridx < ldirr) {
+	    if ((ridx+1)*refRatio < ldirr) {
 	      for (int rx = 0; rx < refRatio; rx++) {
 		for (int ry = 0; ry < refRatio; ry++) {
 		  for (int n = 0; n < nVars; n++) {
