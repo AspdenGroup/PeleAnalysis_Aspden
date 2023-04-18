@@ -15,7 +15,6 @@ void minTheta(int dirx, int diry, int dirz, Vector<Vector<Vector<Real>>>& outdat
   Box probDomain = amrData.ProbDomain()[finestLevel];
   int ldirr = (int)(std::sqrt(2)*std::max(probDomain.length(dirx),probDomain.length(diry))/2.0);
   int ldirz = probDomain.length(dirz);
-  int bandingFactor = 1;
   int refRatio = 1;
   Vector<Real> plo = amrData.ProbLo();
   for (int lev = finestLevel; lev >= 0; lev--) {
@@ -31,19 +30,15 @@ void minTheta(int dirx, int diry, int dirz, Vector<Vector<Vector<Real>>>& outdat
 	  if (inbox(i,j,k,nVars) > 1e-8 && (cComp < 0 || (inbox(i,j,k,cComp) >= cMin && inbox(i,j,k,cComp) < cMax))) {	    
 	    Real xlo = plo[0] + i*dxLev;
 	    Real ylo = plo[1] + j*dyLev;
-	    for (int bfx = 0; bfx < bandingFactor; bfx++) {
-	      for(int bfy = 0; bfy < bandingFactor; bfy++) {
-		Real x = xlo + ((bfx+0.5)*dxLev)/(Real)bandingFactor;
-		Real y = ylo + ((bfy+0.5)*dyLev)/(Real)bandingFactor;
-		Real radius = std::sqrt(x*x + y*y);	     
-		int ridx = (int)(radius/dxLev);
-		if (ridx < ldirr) {
-		  for (int rx = 0; rx < refRatio; rx++) {
-		    for (int ry = 0; ry < refRatio; ry++) {
-		      for (int n = 0; n < nVars; n++) {
-			outdata[n][refRatio*ridx+rx][refRatio*k+ry] = std::min(outdata[n][refRatio*ridx+rx][refRatio*k+ry],inbox(i,j,k,n));
-		      }
-		    }
+	    Real x = xlo + 0.5*dxLev;
+	    Real y = ylo + 0.5*dyLev;
+	    Real radius = std::sqrt(x*x + y*y);	     
+	    int ridx = (int)(radius/dxLev);
+	    if (ridx < ldirr) {
+	      for (int rx = 0; rx < refRatio; rx++) {
+		for (int ry = 0; ry < refRatio; ry++) {
+		  for (int n = 0; n < nVars; n++) {
+		    outdata[n][refRatio*ridx+rx][refRatio*k+ry] = std::min(outdata[n][refRatio*ridx+rx][refRatio*k+ry],inbox(i,j,k,n));
 		  }
 		}
 	      }
