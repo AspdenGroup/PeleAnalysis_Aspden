@@ -20,10 +20,12 @@ Real interpolate(Real x, Real y, Real dx, Real dy, Vector<Vector<Real>> idttab) 
   int yloidx = (int)yloc;
   int tabxsize = idttab.size();
   int tabysize = idttab[0].size();
-  if (xloidx < 0 || xloidx+1 > tabxsize || yloidx < 0 || yloidx+1 > tabysize) {
+  Real minidt = 1e-6;
+  if (xloidx < 0 || xloidx+1 > tabxsize - 1 || yloidx < 0 || yloidx+1 > tabysize - 1) {
     return 0.0;
-  }
-  else {
+  } else if (idttab[xloidx][yloidx] < minidt || idttab[xloidx+1][yloidx] < minidt || idttab[xloidx][yloidx+1] < minidt ||idttab[xloidx+1][yloidx+1] < minidt) {
+    return 0.0;
+  } else {
     Real alphax = xloc-xloidx;
     Real alphay = yloc-yloidx;
     Real idtxlo = (1-alphax)*idttab[xloidx][yloidx] + alphax*idttab[xloidx+1][yloidx];
@@ -170,15 +172,15 @@ main (int   argc,
         AMREX_PARALLEL_FOR_3D ( bx, i, j, k,
         {	  
 	  Real x = inbox(i,j,k,0);
-	  Real y = inbox(i,j,k,1)/H2Ob;//(inbox(i,j,k,1)-Tair+(Tair-Tfuel)*inbox(i,j,k,0))/(Tb-Tair);
+	  Real y = inbox(i,j,k,1)/H2Ob;
 	  outbox(i,j,k,0) = x;
 	  outbox(i,j,k,1) = y;
-	  Real idt = interpolate(x,y,dx,dy,idttab);
-	  if (idt > 1e-12) {
+	  Real idt = interpolate(x,y,dx,dy,idttab); //returns 0 if not autoignitable
+	  if (idt > 1e-7) { 
 	    outbox(i,j,k,2) = idt;
 	    outbox(i,j,k,3) = 1/idt;
 	  } else {  
-	    outbox(i,j,k,2) = 1;
+	    outbox(i,j,k,2) = 0.01;
 	    outbox(i,j,k,3) = 0;
 	  }
 	});
