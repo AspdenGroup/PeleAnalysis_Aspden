@@ -13,8 +13,6 @@
 
 using namespace amrex;
 
-//using namespace analysis_util;
-
 static
 void
 print_usage (int,
@@ -50,8 +48,11 @@ main (int   argc,
       AmrData::SetVerbose(false);
 
     std::string plotFileName; pp.get("infile",plotFileName);
-    std::string fuelName="H2"; pp.query("fuelName",fuelName);
-    
+    //int dualFuel = 0; pp.query("duelFuel");
+    std::string fuelName = "H2"; pp.query("fuelName",fuelName);
+    //if (dualFuel) {
+    std::string fuelName2=""; pp.query("fuelName2",fuelName2);
+    //}
     DataServices::SetBatchMode();
     Amrvis::FileType fileType(Amrvis::NEWPLT);
 
@@ -94,17 +95,24 @@ main (int   argc,
     //Vector<std::string> spec_names = GetSpecNames();
     const Vector<std::string>& plotVarNames = amrData.PlotVarNames();
     const std::string spName= "Y("+fuelName+")";
+    
+    //if (dualFuel) {
+    const std::string spName2 = "Y("+fuelName2+")";
+      //}
     const std::string TName= "temp";
     //std::cout << spName << std::endl;
-    for (int i=0; i<plotVarNames.size(); ++i)
+    /*for (int i=0; i<plotVarNames.size(); ++i)
     {
       if (plotVarNames[i] == spName) idYin = i;
       if (plotVarNames[i] == TName) idTin = i;
     }
     if (idYin<0 || idTin<0)
-      Print() << "Cannot find required data in pltfile" << std::endl;
-    const int nCompIn  = 2;
-    //const int idPhiout = 0;
+    Print() << "Cannot find required data in pltfile" << std::endl;*/
+    const int dualFuel = !fuelName2.empty(); 
+    int nCompIn = 2;
+    if (dualFuel) {
+      nCompIn += 1;
+    }
     const int nCompOut = 2;
     Vector<std::string> outNames(nCompOut);
     Vector<std::string> inNames(nCompIn);
@@ -112,37 +120,53 @@ main (int   argc,
     
     const int idTlocal = 0; // T here
     const int idYlocal = 1; // Y here
-
+    const int idY2local = 2;
     destFillComps[idTlocal] = idTlocal;
     destFillComps[idYlocal] = idYlocal;
+    if (dualFuel) {
+      destFillComps[idY2local] = idY2local;
+    }
     
-    inNames[idTlocal] = "temp";
-    inNames[idYlocal] =  "Y("+fuelName+")";
+    inNames[idTlocal] = TName;
+    inNames[idYlocal] =  spName;
     outNames[idTlocal] = "prog_temp";
-    outNames[idYlocal] = "prog_"+fuelName;
-    
+    if (dualFuel) {
+      inNames[idY2local] = spName2;
+      outNames[idYlocal] = "prog_blend";
+    } else {
+      outNames[idYlocal] = "prog_"+fuelName;
+    }
     Vector<std::unique_ptr<MultiFab>> outdata(Nlev);
     const int nGrow = 0;
     int b[3] = {1, 1, 1};
-    Real Y_fuel_u, Y_fuel_b, T_u, T_b;
+    Real Y_fuel_u, Y_fuel_b, T_u, T_b, Y_blend_u, Y_blend_b;
     if(initNormalise) {
-      if(initAmrData.MinMax(initAmrData.ProbDomain()[0],"Y("+fuelName+")",0,Y_fuel_b,Y_fuel_u) && initAmrData.MinMax(initAmrData.ProbDomain()[0],"temp",0,T_u,T_b)) {
-	if (ParallelDescriptor::IOProcessor())
-	  std::cout << "Found min/max" << std::endl;
+      if(initAmrData.MinMax(initAmrData.ProbDomain()[0],spName,0,Y_fuel_b,Y_fuel_u) && initAmrData.MinMax(initAmrData.ProbDomain()[0],TName,0,T_u,T_b)) {
+	if (dualFuel && initAmrData.MinMax(initAmrData.ProbDomain()[0],spName2,0,Y_blend_b,Y_blend_u)) {
+	  if (ParallelDescriptor::IOProcessor())
+	  std::cout << "Found min/max (blend)" << std::endl;
+	} else {
+	  if (ParallelDescriptor::IOProcessor())
+	    std::cout << "Found min/max" << std::endl;
+	}
       } else {
 	std::cout << "Could not find min/max" << std::endl;
 	DataServices::Dispatch(DataServices::ExitRequest, NULL);
       }
     } else {
-       if(amrData.MinMax(amrData.ProbDomain()[0],"Y("+fuelName+")",0,Y_fuel_b,Y_fuel_u) && amrData.MinMax(amrData.ProbDomain()[0],"temp",0,T_u,T_b)){
-	 if (ParallelDescriptor::IOProcessor())
-	   std::cout << "Found min/max" << std::endl;
+       if(amrData.MinMax(amrData.ProbDomain()[0],spName,0,Y_fuel_b,Y_fuel_u) && amrData.MinMax(amrData.ProbDomain()[0],TName,0,T_u,T_b)){
+	 if (dualFuel && amrData.MinMax(amrData.ProbDomain()[0],spName2,0,Y_blend_b,Y_blend_u)) {
+	   if (ParallelDescriptor::IOProcessor())
+	     std::cout << "Found min/max (blend)" << std::endl;
+	} else {
+	   if (ParallelDescriptor::IOProcessor())
+	     std::cout << "Found min/max" << std::endl;
+	 }
        } else {
 	 std::cout << "Could not find min/max" << std::endl;
 	 DataServices::Dispatch(DataServices::ExitRequest, NULL);
        }
     }
-   
 
     for (int lev=0; lev<Nlev; ++lev)
     {
@@ -158,15 +182,17 @@ main (int   argc,
       {
 	
         const Box& bx = mfi.tilebox();
-	Array4<Real> const& temp  = indata.array(mfi);
-        Array4<Real> const& Y_fuel  = indata.array(mfi);
-        Array4<Real> const& prog_temp = (*outdata[lev]).array(mfi);
-        Array4<Real> const& prog_fuel = (*outdata[lev]).array(mfi);
+	Array4<Real> const& inbox  = indata.array(mfi);
+        Array4<Real> const& outbox = (*outdata[lev]).array(mfi);
 
         AMREX_PARALLEL_FOR_3D ( bx, i, j, k,
         {
-	  prog_temp(i,j,k,idTlocal) = (temp(i,j,k,idTlocal)-T_u)/(T_b-T_u);
-          prog_fuel(i,j,k,idYlocal) = 1-Y_fuel(i,j,k,idYlocal)/Y_fuel_u;
+	  outbox(i,j,k,idTlocal) = (inbox(i,j,k,idTlocal)-T_u)/(T_b-T_u);
+	  if (dualFuel) {
+	    outbox(i,j,k,idYlocal) = 1-(inbox(i,j,k,idYlocal)+inbox(i,j,k,idY2local))/(Y_fuel_u+Y_blend_u);
+	  } else {
+	    outbox(i,j,k,idYlocal) = 1-inbox(i,j,k,idYlocal)/Y_fuel_u;
+	  }
         });
       }
 
