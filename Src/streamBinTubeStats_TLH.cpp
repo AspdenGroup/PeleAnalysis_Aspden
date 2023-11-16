@@ -157,6 +157,15 @@ main (int   argc,
       derCompsOut.push_back("zone");
       nDerOut += 3;      
     }
+    if (derCompsIn[iDerFlag]=="reactionZoneThickness") {
+	std::string reactionVar = "HeatRelease";
+	pp.query("rztVar",reactionVar);
+	derIdxIn[iDerFlag].push_back(getVarIdx(reactionVar,variableNames,nComps)); //add HRR idx
+	derIdxOut[iDerFlag].resize(1); //one out idx (rzt)
+	derIdxOut[iDerFlag][0] = localDerOut;
+	derCompsOut.push_back("reactionZoneThickness");
+	nDerOut += 1;
+      }
   }
   AMREX_ALWAYS_ASSERT(derCompsOut.size() == nDerOut); //just a check on derive components out
   Print() << "Derived components: " << std::endl;
@@ -278,6 +287,7 @@ main (int   argc,
   Real areaLoc,volLoc;
   Real filels = 0;
   Real filess = 0;
+  Real filedelta = 0;
   Real fileEbar = 0;
   int getEbar = 1; pp.query("getEbar", getEbar);
   int strainIdx = -1;
@@ -289,7 +299,7 @@ main (int   argc,
   Real normAreaLS = surfaceArea; 
   Real normAreaSS = surfaceArea;
   Real normAreaEBAR = surfaceArea;
-
+  Real normAreaDelta = surfaceArea;
   Print() << "Iterating over elements ..." << std::endl;
   int numFixedElts = 0;
   Real ds=-1;
@@ -347,6 +357,15 @@ main (int   argc,
 	 normAreaLS -= areaLoc;
        }
      }
+     if (derCompsIn[iDerFlag]=="reactionZoneThickness") {
+       outComp=derIdxOut[iDerFlag][0];
+       surfDer[iElt][outComp] = calcIntegral(derIdxIn[iDerFlag][0],nPtsOnStream,localStreamData,areaLoc)/calcMax(derIdxIn[iDerFlag][0],nPtsOnStream,localStreamData);
+       if (std::isfinite(surfDer[iElt][outComp])) {
+	 filedelta += surfDer[iElt][outComp]*areaLoc;
+       } else {
+	 normAreaDelta -= areaLoc;
+       }
+     }
      if (derCompsIn[iDerFlag]=="flameSpeed") {
        outComp = derIdxOut[iDerFlag][0];
        surfDer[iElt][outComp] = calcIntegral(derIdxIn[iDerFlag][0],nPtsOnStream,localStreamData,areaLoc)/rhoY;
@@ -357,8 +376,6 @@ main (int   argc,
        } else {
 	 normAreaSS -= areaLoc;
        }
-       
-       
      }
      if (derCompsIn[iDerFlag]=="principalCurvatureZones") {
        Real avgMk = calcAvgVal(derIdxIn[iDerFlag][0],nPtsOnStream,localStreamData);
@@ -428,6 +445,7 @@ main (int   argc,
   filels /= normAreaLS;
   filess /= normAreaSS;
   fileEbar /= normAreaEBAR;
+  filedelta /= normAreaDelta;
   //array reducing stuff (JPDFs, conditionally averaged streamlines)
   //stuff for zone averaging
   
@@ -463,6 +481,7 @@ main (int   argc,
   
   int zoneComp = -1;
   int thermalThicknessComp = -1;
+  int reactionZoneThicknessComp = -1;
   for (iDerFlag=0; iDerFlag<nDerFlag; iDerFlag++) {
     if (derCompsIn[iDerFlag]=="principalCurvatureZones") {
       zoneComp = derIdxOut[iDerFlag][2];
@@ -470,6 +489,9 @@ main (int   argc,
     if (derCompsIn[iDerFlag]=="flameThickness") {
       thermalThicknessComp = derIdxOut[iDerFlag][0];
     }
+    //if (derCompsIn[iDerFlag]=="reactionZoneThickness") {
+    //  reactionZoneThicknessComp = derIdxOut[iDerFlag][0];
+    //}
   }
   if (zoneComp < 0 && dumpPKZstreams) {
     Abort("can't find zone comp");
@@ -477,6 +499,9 @@ main (int   argc,
   if (thermalThicknessComp < 0 && dumpPKZstreams) {
     Abort("can't find thermal thickness comp");
   }
+  //if (reactionZoneThicknessComp < 0 && dumpPKZstream) {
+    
+  //}
 #ifdef _OPENMP
   #pragma omp parallel
   {
@@ -571,7 +596,7 @@ main (int   argc,
 
   std::ofstream os(filename.c_str(),std::ios::out);
   
-  os << filels << " " << filess << " " << fileEbar << std::endl;
+  os << filels << " " << filess << " " << fileEbar << " " << filedelta << std::endl;
 
   os.close();
 
