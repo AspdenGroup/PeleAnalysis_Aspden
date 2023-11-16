@@ -31,8 +31,10 @@ VPATH_LOCATIONS   += $(Blocs)
 CEXE_sources += cmdline.cpp main.cpp output.cpp qslim.cpp
 INCLUDE_LOCATIONS += ${MIX_ROOT}
 INCLUDE_LOCATIONS += ${GFX_ROOT}/include
+###INCLUDE_LOCATIONS += ~/usr/include
 LIBRARY_LOCATIONS += ${MIX_ROOT}
 LIBRARY_LOCATIONS += ${GFX_ROOT}/src
+###LIBRARY_LOCATIONS += ~/usr/lib64
 LIBRARIES += -lmix -lgfx 
 DEFINES += -DHAVE_CONFIG_H -DHAVE_BOOL
 

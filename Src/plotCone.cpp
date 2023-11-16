@@ -7,7 +7,7 @@
 #include <AMReX_DataServices.H>
 #include <AMReX_BCRec.H>
 #include <AMReX_Interpolater.H>
-//#include <WritePlotFile.H>
+#include <WritePlotFile.H>
 
 #include <AMReX_BLFort.H>
 
@@ -50,10 +50,8 @@ main (int   argc,
       AmrData::SetVerbose(false);
 
     std::string plotFileName; pp.get("infile",plotFileName);
-    Vector<std::string> varNames;
-    int nVar= pp.countval("vars");
-    varNames.resize(nVar);
-    pp.getarr("vars",varNames,0,nVar);
+    std::string fuelName="H2"; pp.query("fuelName",fuelName);
+    
     DataServices::SetBatchMode();
     Amrvis::FileType fileType(Amrvis::NEWPLT);
 
@@ -63,45 +61,29 @@ main (int   argc,
       // ^^^ this calls ParallelDescriptor::EndParallel() and exit()
     }
     AmrData& amrData = dataServices.AmrDataRef();
-
     int finestLevel = amrData.FinestLevel();
     pp.query("finestLevel",finestLevel);
     int Nlev = finestLevel + 1;
-
-    Vector<int> idVin(nVar);
-    for (int i = 0; i<nVar; ++i) {
-      idVin[i] = -1;
-    } 
-    
-    const Vector<std::string>& plotVarNames = amrData.PlotVarNames();
-    
-    for (int i=0; i<plotVarNames.size(); ++i)
-    {
-      for (int j = 0; j<nVar; ++j) {	
-	if (plotVarNames[i] == varNames[j]) idVin[j] = i;
-      }
-    }
-    for (int i = 0; i<nVar; ++i) {
-      if (idVin[i] < 0) {
-	//Print() << "Cannot find " << varNames[i] << " in pltfile data" << std::endl;
-	Abort("Cannot find "+varNames[i]+" in pltfile data"); 
-      }
-    }
-    const int nCompIn  = nVar;
-    const int nCompOut = nVar;
+    Real r0,grad;
+    pp.get("r0",r0);
+    pp.get("grad",grad);
+    int nCompIn = pp.countval("vars");
+    const int nCompOut = nCompIn+1;
     Vector<std::string> outNames(nCompOut);
     Vector<std::string> inNames(nCompIn);
     Vector<int> destFillComps(nCompIn);
-    
-    for (int i = 0; i<nVar; i++) {
-      destFillComps[i] = i;
-      inNames[i] = varNames[i];
-      outNames[i] = "maxDelta_"+varNames[i];
+    if (nCompIn > 0) {
+      pp.getarr("vars",inNames);
     }
+    for (int i = 0; i < nCompIn; i++) {
+      destFillComps[i] = i;
+      outNames[i] = inNames[i];
+    }
+    outNames[nCompIn] = "cone";
+    Vector<Real> plo =  amrData.ProbLo();
     
     Vector<std::unique_ptr<MultiFab>> outdata(Nlev);
-    const int nGrow = 1;
-    //int b[3] = {1, 1, 1};
+    const int nGrow = 0;
     
     for (int lev=0; lev<Nlev; ++lev)
     {
@@ -109,7 +91,7 @@ main (int   argc,
       const DistributionMapping dm(ba);
       outdata[lev].reset(new MultiFab(ba,dm,nCompOut,nGrow));
       MultiFab indata(ba,dm,nCompIn,nGrow);
-
+      Real dx = amrData.DxLevel()[lev][0];
       Print() << "Reading data for level " << lev << std::endl;
       amrData.FillVar(indata,lev,inNames,destFillComps); //Problem
       Print() << "Data has been read for level " << lev << std::endl;
@@ -117,29 +99,37 @@ main (int   argc,
       {
 	
         const Box& bx = mfi.tilebox();
-	Array4<Real> const& varsIn  = indata.array(mfi);
-        Array4<Real> const& varsOut = (*outdata[lev]).array(mfi);
-
+	Array4<Real> const& inbox  = indata.array(mfi);
+        Array4<Real> const& outbox = (*outdata[lev]).array(mfi);
+    
         AMREX_PARALLEL_FOR_3D ( bx, i, j, k,
         {
-	  for (int n=0;n<nVar; n++) {
-	    Real deltaxp1 = std::abs(varsIn(i+1,j,k,n)-varsIn(i,j,k,n));
-	    Real deltaxm1 = std::abs(varsIn(i,j,k,n)-varsIn(i-1,j,k,n));
-	    Real deltayp1 = std::abs(varsIn(i,j+1,k,n)-varsIn(i,j,k,n));
-	    Real deltaym1 = std::abs(varsIn(i,j,k,n)-varsIn(i,j-1,k,n));
-	    Real deltazp1 = std::abs(varsIn(i,j,k+1,n)-varsIn(i,j,k,n));
-	    Real deltazm1 = std::abs(varsIn(i,j,k,n)-varsIn(i,j,k-1,n));
-	    varsOut(i,j,k,n) = std::max(std::max(deltaxp1,std::max(deltaxm1,deltayp1)),std::max(deltaym1,std::max(deltazp1,deltazm1)));
-	  } 
+	  for (int n = 0; n < nCompIn; n++) {
+	    outbox(i,j,k,n) = inbox(i,j,k,n);
+	  }
+	  Real x = plo[0] + dx*(i+0.5);
+	  Real y = plo[1] + dx*(j+0.5);
+	  Real r = std::sqrt(x*x+y*y);
+	  Real z = plo[2] + dx*(k+0.5);
+	  Real p = r0+grad*z;
+	  Real alpha = (r-p)/dx;
+	  if (alpha < -0.5) {
+	    outbox(i,j,k,nCompIn) = 1;
+	  } else if (alpha > 0.5) {
+	    outbox(i,j,k,nCompIn) = 0;
+	  } else {
+	    outbox(i,j,k,nCompIn) = 0.5-alpha;
+	  }
+	  
         });
       }
 
       Print() << "Derive finished for level " << lev << std::endl;
     }
 
-    std::string outfile(getFileRoot(plotFileName) + "_delta");
+    std::string outfile(getFileRoot(plotFileName) + "_cone");
     Print() << "Writing new data to " << outfile << std::endl;
-    const bool verb = true;
+    const bool verb = false;
     WritePlotFile(GetVecOfPtrs(outdata),amrData,outfile,verb,outNames);
   }
   Finalize();

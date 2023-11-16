@@ -4,7 +4,7 @@
 #include <AMReX_Particles.H>
 
 // file variables in/out
-#define DEF_FCOMP (AMREX_SPACEDIM+8)
+#define DEF_FCOMP (AMREX_SPACEDIM+7)
 
 // variables to carry on the stream
 // keep an extra copy of location to deal with periodic bcs
@@ -12,27 +12,35 @@
 
 const amrex::Vector<std::string> inVarNames = {
   //  D_DECL("x_velocity", "y_velocity", "z_velocity"),
-  D_DECL("FlameNormalX_prog_H2", "FlameNormalY_prog_H2", "FlameNormalZ_prog_H2"),
-  "Y(H2)",
+  //D_DECL("FlameNormalX_prog_H2", "FlameNormalY_prog_H2", "FlameNormalZ_prog_H2"),
+  /*"Y(H2)",
   "temp",
   "H2_ConsumptionRate",
   "HeatRelease",
   "StrainRate_prog_H2",
   "||gradtemp||",
   "MeanCurvature_prog_H2",
-  "GaussianCurvature_prog_H2"
+  "GaussianCurvature_prog_H2",
+  "phi"*/
+  D_DECL("FlameNormalX_progress_variable", "FlameNormalY_progress_variable", "FlameNormalZ_progress_variable"),  
+  "Y(H2)",
+  "temp",
+  "density",
+  "I_R(H2)",
+  "QoverCP",
+  "phi",
+  "zone"
 }; 
 
 const amrex::Vector<std::string> outVarNames = {
   D_DECL("X", "Y", "Z"),
   "H2_MassFraction",
   "Temp",
-  "H2_ConsumptionRate",
-  "HeatRelease",
-  "StrainRate_prog_H2",
-  "ModGradTemp",
-  "MeanCurvature_prog_H2",
-  "GaussianCurvature_prog_H2"
+  "Density",
+  "H2_ProductionRate",
+  "QoverCP",
+  "phi",
+  "zone"
 }; 
 
 struct RealData

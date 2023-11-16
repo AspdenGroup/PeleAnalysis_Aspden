@@ -1,21 +1,21 @@
-
 AMREX_HOME = ../amrex
 DEBUG	      = FALSE
 DIM	      = 3
-COMP          = gcc
+COMP          = gnu
 PRECISION     = DOUBLE
-USE_MPI       = TRUE
+USE_MPI       = FALSE
 USE_OMP       = FALSE
 
-#EBASE         = combinePlts
-#EBASE         = isosurface
+EBASE         = combinePlts
+EBASE         = isosurface
 EBASE         = partStream
 #EBASE         = stream2plt
 #EBASE         = streamScatter
 #EBASE         = streamSub
-#EBASE         = streamTubeStats
+#EBASE         = streamBinTubeStats
+#EBASE         = streamBinTubeStats_TLH
 #EBASE         = curvature
-#EBASE         = surfMEFtoDATnormS
+#EBASE         = surfMEFtoDATnorm
 #EBASE         = surfMEFtoDAT
 #EBASE         = surfMEFtoDATbasic
 #EBASE         = surfDATtoMEF
@@ -27,20 +27,36 @@ EBASE         = partStream
 #EBASE         = plotPhi
 #EBASE         = decimate
 #EBASE         = areaMEF   
+#EBASE		= deltaCheck
+#EBASE		= avgPlots
+#EBASE		= surfStats
+#EBASE		= makePlotfile
+#EBASE		= addDummies
+#EBASE		= diffSlice
+#EBASE		= centerline
+#EBASE		= plotZC_noTerms
+#EBASE		= flameindex
+#EBASE		= trimPlotfile
+#EBASE		= jpdf
+#EBASE		= machnumber
+#EBASE		= dissipationrateZ
+#EBASE		= slicescatter
+#EBASE		= avgFlucs
+#EBASE		= avgPlots
+#EBASE		= plotZC_noTerms
+#EBASE		= boxTagging
+#EBASE		= straintensor
+#EBASE		= microscales
+#EBASE		= diffusivefluxes
+EBASE		= grad
 NEEDS_f90_SRC = FALSE
 
-#EBASE         = grad
 #EBASE         = sampleStreamlines
 #EBASE         = stream
-#EBASE         = CORIstream
+#EBASE		= plotZC
+#EBASE		= avgTheta
 #NEEDS_f90_SRC = TRUE
 
-#EBASE         = streamBinTubeStats
-#NEEDS_f90_SRC = FALSE
-#USE_MPI       = FALSE
-
-#USE_MPI       = FALSE
-#DEBUG         = TRUE
 
 include $(AMREX_HOME)/Tools/GNUMake/Make.defs
 
@@ -64,8 +80,8 @@ include $(Ppack)
 INCLUDE_LOCATIONS += $(Blocs)
 VPATH_LOCATIONS   += $(Blocs)
 
-CEXE_sources += AppendToPlotFile.cpp WritePlotFile.cpp
-CEXE_headers += AppendToPlotFile.H   WritePlotFile.cpp
+#CEXE_sources += AppendToPlotFile.cpp WritePlotFile.cpp
+#CEXE_headers += AppendToPlotFile.H   WritePlotFile.H
 INCLUDE_LOCATIONS += $(AMREX_HOME)/Tools/C_util
 VPATH_LOCATIONS += $(AMREX_HOME)/Tools/C_util
 

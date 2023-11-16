@@ -50,7 +50,7 @@
 /* #undef HAVE_LIBTIFF_LZW */
 
 /* Define if libpng is available */
-#define HAVE_LIBPNG 1
+/* #undef HAVE_LIBPNG */
 
 /* Define if the Independent JPEG Group's libjpeg is available */
 #define HAVE_LIBJPEG 1
@@ -61,10 +61,10 @@
 #define HAVE_OPENGL "OpenGL"
 
 /* Define if glPolygonOffsetEXT is available */
-#define HAVE_POLYOFFSET_EXT 1
+/* #undef HAVE_POLYOFFSET_EXT */
 
 /* Define if glPolygonOffset is available */
-#define HAVE_POLYOFFSET 1
+/* #undef HAVE_POLYOFFSET */
 
 /* Define if <GL/glext.h> header is available */
 #define HAVE_GL_GLEXT_H 1

@@ -12,6 +12,7 @@ f/
 o/
 t/
 TAGS
+GNUMakefile*
 
 # latex
 *.aux

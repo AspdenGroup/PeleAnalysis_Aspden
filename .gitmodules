@@ -1,3 +1,6 @@
 [submodule "amrex"]
 	path = amrex
 	url = https://github.com/AMReX-Codes/amrex.git
+[submodule "Src/ModelSpecificAnalysis/PelePhysics"]
+	path = Src/ModelSpecificAnalysis/PelePhysics
+	url = git@github.com:AMReX-Combustion/PelePhysics.git
