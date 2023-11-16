@@ -53,6 +53,7 @@ main (int   argc,
     //if (dualFuel) {
     std::string fuelName2=""; pp.query("fuelName2",fuelName2);
     //}
+    int fuelWeight = 1; pp.query("fuelWeight",fuelWeight);
     DataServices::SetBatchMode();
     Amrvis::FileType fileType(Amrvis::NEWPLT);
 
@@ -189,7 +190,7 @@ main (int   argc,
         {
 	  outbox(i,j,k,idTlocal) = (inbox(i,j,k,idTlocal)-T_u)/(T_b-T_u);
 	  if (dualFuel) {
-	    outbox(i,j,k,idYlocal) = 1-(inbox(i,j,k,idYlocal)+inbox(i,j,k,idY2local))/(Y_fuel_u+Y_blend_u);
+	    outbox(i,j,k,idYlocal) = 1-(fuelWeight*inbox(i,j,k,idYlocal)+inbox(i,j,k,idY2local))/(fuelWeight*Y_fuel_u+Y_blend_u);
 	  } else {
 	    outbox(i,j,k,idYlocal) = 1-inbox(i,j,k,idYlocal)/Y_fuel_u;
 	  }
