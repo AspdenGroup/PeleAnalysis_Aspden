@@ -396,8 +396,10 @@ int main(int argc, char *argv[])
     //case 3 doesn't care about directions
   }
 #elif AMREX_SPACEDIM==2
-  pp.get("dir",dir);
-  dir1 = (dir+1)%2;
+  if (integralDimension == 1) {
+    pp.get("dir",dir);
+    dir1 = (dir+1)%2;
+  }
 #endif
   std::string outfile= infile+"_integral";
   if(integralDimension < AMREX_SPACEDIM) {
