@@ -13,16 +13,29 @@
 using namespace amrex;
 
 extern "C" {
-  void pushvtog(const int* lo,  const int* hi,
+#if (AMREX_SPACEDIM == 2)
+  void pushvtog2d(const int* lo,  const int* hi,
                 const int* dlo, const int* dhi,
                 Real* U, const int* Ulo, const int* Uhi,
                 const int* nc);
-  void vtrace(const Real* T,    const int* T_lo,    const int* T_hi,    const int* nT,
+  void vtrace2d(const Real* T,    const int* T_lo,    const int* T_hi,    const int* nT,
               const Real* loc,  const int* loc_lo,  const int* loc_hi,  const int* nl,
               const int*  ids,  const int* n_ids,
               Real*       g,    const int* g_lo,    const int* g_hi,    const int* computeVec,
               Real*       strm, const int* strm_lo, const int* strm_hi, const int* ncs,
               const Real* dx, const Real* plo, const Real* hRK, const int* errFlag);
+#elif (AMREX_SPACEDIM == 3)
+  void pushvtog3d(const int* lo,  const int* hi,
+                const int* dlo, const int* dhi,
+                Real* U, const int* Ulo, const int* Uhi,
+                const int* nc);
+  void vtrace3d(const Real* T,    const int* T_lo,    const int* T_hi,    const int* nT,
+              const Real* loc,  const int* loc_lo,  const int* loc_hi,  const int* nl,
+              const int*  ids,  const int* n_ids,
+              Real*       g,    const int* g_lo,    const int* g_hi,    const int* computeVec,
+              Real*       strm, const int* strm_lo, const int* strm_hi, const int* ncs,
+              const Real* dx, const Real* plo, const Real* hRK, const int* errFlag);
+#endif
 
 }
 static const Real eps = 1.e-4; // distance inside domain surface points are pushed if they fall outside
@@ -747,10 +760,18 @@ main (int   argc,
             {
                 FArrayBox& fab = (*state[lev])[mfi];
                 const Box& box = mfi.validbox();
-                pushvtog(BL_TO_FORTRAN_BOX(box),
+#if (AMREX_SPACEDIM == 2)
+		pushvtog2d(BL_TO_FORTRAN_BOX(box),
                          BL_TO_FORTRAN_BOX(box),
                          BL_TO_FORTRAN_N_ANYD(fab,isoCompSt),
                          &nCompSt);
+#elif (AMREX_SPACEDIM == 3)
+		pushvtog3d(BL_TO_FORTRAN_BOX(box),
+                         BL_TO_FORTRAN_BOX(box),
+                         BL_TO_FORTRAN_N_ANYD(fab,isoCompSt),
+                         &nCompSt);
+#endif
+		
             }
                 
             if (lev>0) {
@@ -809,14 +830,21 @@ main (int   argc,
                 }
 
                 int errFlag = 0;
-
-                vtrace(BL_TO_FORTRAN_N_ANYD(fab,isoCompSt),  &nCompSt,
+#if (AMREX_SPACEDIM == 2)
+                vtrace2d(BL_TO_FORTRAN_N_ANYD(fab,isoCompSt),  &nCompSt,
                        BL_TO_FORTRAN_N_ANYD(nodes,      0),  &nCompSurf,
                        ids.dataPtr(), &n_ids,
                        BL_TO_FORTRAN_N_ANYD(*vec, vecComp),  &computeVec,
                        BL_TO_FORTRAN_N_ANYD(strm,       0),  &nCompStr,
                        delta.dataPtr(), plo.dataPtr(), &hRK, &errFlag);
-                         
+#elif (AMREX_SPACEDIM == 3)
+                vtrace3d(BL_TO_FORTRAN_N_ANYD(fab,isoCompSt),  &nCompSt,
+                       BL_TO_FORTRAN_N_ANYD(nodes,      0),  &nCompSurf,
+                       ids.dataPtr(), &n_ids,
+                       BL_TO_FORTRAN_N_ANYD(*vec, vecComp),  &computeVec,
+                       BL_TO_FORTRAN_N_ANYD(strm,       0),  &nCompStr,
+                       delta.dataPtr(), plo.dataPtr(), &hRK, &errFlag);
+#endif
                 if (errFlag > 0) {
                     amrex::Abort("Problem with interpolation");
                 }
