@@ -67,16 +67,27 @@ main (int   argc,
 	
 	AmrData& amrData = dataServices.AmrDataRef();
 
-	const int nComp = pp.countval("comps");
-	Vector<std::string> scomps; scomps.resize(nComp);
-	pp.getarr("comps",scomps,0,nComp);
-
 	Vector<int> comps;
 	const Vector<std::string>& plotVarNames = amrData.PlotVarNames();
-	for (int i = 0; i < plotVarNames.size(); ++i) {
-	    for (int j = 0; j < scomps.size(); ++j) {
-		if (plotVarNames[i] == scomps[j]) {
-		    comps.push_back(i);
+	int tmp_ncomp = pp.countval("comps");
+	if (tmp_ncomp == 0) {
+	    tmp_ncomp = plotVarNames.size();
+	}
+	const int nComp = tmp_ncomp;
+	Vector<std::string> scomps; scomps.resize(nComp);
+	pp.queryarr("comps",scomps,0,nComp);
+
+	if (plotVarNames.size() == nComp) {
+	    for (int i = 0; i < plotVarNames.size(); ++i) {	    
+		comps.push_back(i);
+	    }
+	}
+	else {
+	    for (int i = 0; i < plotVarNames.size(); ++i) {
+		for (int j = 0; j < scomps.size(); ++j) {
+		    if (plotVarNames[i] == scomps[j]) {
+			comps.push_back(i);
+		    }
 		}
 	    }
 	}
