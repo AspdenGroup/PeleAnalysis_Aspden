@@ -18,7 +18,7 @@ print_usage (int,
              char* argv[])
 {
     std::cerr << "usage:\n";
-    std::cerr << argv[0] << " infile=<name> outfile=<name> comps=<comp_names>";
+    std::cerr << argv[0] << " infile=<name> outfile=<name> remove=<comps_name_to_remove>";
     exit(1);
 }
 
@@ -38,11 +38,17 @@ main (int   argc,
 	if (argc < 2)
 	    print_usage(argc,argv);
 
-	ParmParse pp;
 
+	// check if compiled as float
+	{
+	    Real test_float = 1.2;
+	    if (test_float != float(test_float))
+		amrex::Abort("WARNING: compiled as double");
+	}
+	
+	ParmParse pp;
 	if (pp.contains("help"))
 	    print_usage(argc,argv);
-
 	if (pp.contains("verbose"))
 	    AmrData::SetVerbose(true);
 
@@ -51,10 +57,9 @@ main (int   argc,
 	pp.get("infile",infile);
 	std::string outfile;
 	pp.get("outfile",outfile);
-
 	// check they are not the same (ie do not overwrite)
 	if (infile == outfile)
-	    amrex::Abort("it would be safer not to have output name == input name");
+	    amrex::Abort("It would be safer not to have output name == input name");
 	
 	DataServices::SetBatchMode();
 	Amrvis::FileType fileType(Amrvis::NEWPLT);
@@ -67,31 +72,48 @@ main (int   argc,
 	
 	AmrData& amrData = dataServices.AmrDataRef();
 
-	Vector<int> comps;
+	
+	// plot file variables
 	const Vector<std::string>& plotVarNames = amrData.PlotVarNames();
-	int tmp_ncomp = pp.countval("comps");
-	if (tmp_ncomp == 0) {
-	    tmp_ncomp = plotVarNames.size();
-	}
-	const int nComp = tmp_ncomp;
-	Vector<std::string> scomps; scomps.resize(nComp);
-	pp.queryarr("comps",scomps,0,nComp);
+	const int init_ncomp = plotVarNames.size();
 
-	if (plotVarNames.size() == nComp) {
-	    for (int i = 0; i < plotVarNames.size(); ++i) {	    
-		comps.push_back(i);
-	    }
+	// variables to remove provided by user
+	const int remove_nComp = pp.countval("remove");
+	Vector<std::string> removeVarNames;
+	removeVarNames.resize(remove_nComp);
+	pp.queryarr("remove",removeVarNames,0,remove_nComp);
+	Vector<int> remove_comps;         // for index of remove variables
+	
+	// variables to keep	
+	Vector<int> keep_comps;                // for index of keep variables
+	Vector<std::string> keepVarNames; // for string of keep variables
+
+	// initally set all variables to keep
+	keepVarNames = plotVarNames;  
+	for (int i = 0; i < plotVarNames.size(); ++i) {
+	    keep_comps.push_back(i);
 	}
-	else {
-	    for (int i = 0; i < plotVarNames.size(); ++i) {
-		for (int j = 0; j < scomps.size(); ++j) {
-		    if (plotVarNames[i] == scomps[j]) {
-			comps.push_back(i);
-		    }
+
+	// find indexes to remove
+	for (int i = 0; i < plotVarNames.size(); ++i) {
+	    for (int j = 0; j < remove_nComp; ++j) {
+		if (keepVarNames[i] == removeVarNames[j]) {
+		    Print() << "removing plot variable: " << keepVarNames[i] << "\n";
+		    remove_comps.push_back(i);
 		}
 	    }
 	}
-		
+
+	// assign keep indexes to comps
+	Vector<int> comps;
+	for (const auto &value : keep_comps) {
+	    if (std::find(remove_comps.begin(), remove_comps.end(), value) == remove_comps.end()) {
+		comps.push_back(value);
+	    }
+	}	
+	const int nComp = comps.size();
+	
+	
 	int Nlev = amrData.FinestLevel() + 1;
 	
 	Vector<MultiFab*> fileData(Nlev);
