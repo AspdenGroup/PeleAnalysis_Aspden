@@ -3,64 +3,33 @@
 
 #include <AMReX_Particles.H>
 
-// file variables in/out
-#define DEF_FCOMP (AMREX_SPACEDIM+11)
-
-// variables to carry on the stream
-// keep an extra copy of location to deal with periodic bcs
-#define DEF_PCOMP (AMREX_SPACEDIM+DEF_FCOMP)
-
-const amrex::Vector<std::string> inVarNames = {
-  D_DECL("FlameNormalX_prog_H2", "FlameNormalY_prog_H2", "FlameNormalZ_prog_H2"),
-  "Y(H2)",
-  "temp",
-  "H2_ConsumptionRate",
-  "HeatRelease",
-  "StrainRate_prog_H2",
-  "||gradtemp||",
-  "MeanCurvature_prog_H2",
-  "GaussianCurvature_prog_H2",
-  "phi",
-  "QoverRhoCP",
-  "VelFlameNormal"
-}; 
-
-const amrex::Vector<std::string> outVarNames = {
-  D_DECL("X", "Y", "Z"),
-  "Y(H2)",
-  "temp",
-  "H2_ConsumptionRate",
-  "HeatRelease",
-  "StrainRate_prog_H2",
-  "||gradtemp||",
-  "MeanCurvature_prog_H2",
-  "GaussianCurvature_prog_H2",
-  "phi",
-  "QoverRhoCP",
-  "VelFlameNormal"
-}; 
+typedef amrex::Array<amrex::Real,AMREX_SPACEDIM> dim3;
+typedef amrex::Array<int,AMREX_SPACEDIM> int3;
 
 struct RealData
 {
   enum {
     AMREX_D_DECL(xloc = 0,
                  yloc,
-                 zloc)
+                 zloc),
   };
 };
 
 class StreamParticleContainer
-  : public amrex::ParticleContainer<0, DEF_PCOMP, 0, 0>
+  : public amrex::ParticleContainer<0, 3, 0, 0>
 {
 public:
 
-  using MyParIter = amrex::ParIter<0, DEF_PCOMP, 0, 0>;
+  using MyParIter = amrex::ParIter<0, 3, 0, 0>;
 
   StreamParticleContainer (int                                               a_nPtsOnStrm,
                            const amrex::Vector<amrex::Geometry>            & a_geoms,
                            const amrex::Vector<amrex::DistributionMapping> & a_dmaps,
                            const amrex::Vector<amrex::BoxArray>            & a_bas,
-                           const amrex::Vector<int>                        & a_rrs);
+                           const amrex::Vector<int>                        & a_rrs,
+			   const int                                       a_nVar,
+			   const amrex::IntVect                            a_is_per,
+			   const amrex::Vector<std::string>                & a_outVarNames);
 
   void InitParticles(const amrex::Vector<amrex::Vector<amrex::Real>>& a_locs);
 
@@ -71,21 +40,29 @@ public:
                            const amrex::Vector<amrex::MultiFab> & a_vectorField);
 
   void InterpDataAtLocation(int                                    a_fromLoc,
-                            const amrex::Vector<amrex::MultiFab> & a_vectorField);
-
-  void WriteStreamAsTecplot(const std::string& outfile);
-
+			    const amrex::Vector<amrex::MultiFab> & a_vectorField);
+  
+  
   void WriteStreamAsBinary(const std::string& outfile,
 			   amrex::Vector<int>& faceData,
 			   const int nStreamPairs);
 
-  void InspectParticles(const int nStreamPairs);
+  
+  void WriteStreamAsTecplot(const std::string& outfile);
 
+  bool RK4(dim3 & x,amrex::Real dt,const amrex::FArrayBox& v,const amrex::Real* dx,const amrex::Real* plo,const amrex::Real* phi,int dir);
+
+  void InspectParticles(const int nStreamPairs);
+  
+  
 protected:
   int Nlev;
   int nPtsOnStrm;
   int sizeOfRealStreamData;
-
+  int pcomp;
+  int fcomp;
+  amrex::IntVect is_per;
+  amrex::Vector<std::string> outVarNames;
 private:
 
 };

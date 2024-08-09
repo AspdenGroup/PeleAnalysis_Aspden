@@ -13,15 +13,14 @@ GetSeedLocations (const StreamParticleContainer& spc, Vector<int>& faceData)
 
   ParmParse pp;
   int nc=pp.countval("oneSeedPerCell");
-  int ni=pp.countval("isofile");
+  int ni=pp.countval("isoFile");
   int ns=pp.countval("seedLoc");
   int nrL=pp.countval("seedRakeL");
   int nrR=pp.countval("seedRakeR");
-  AMREX_ALWAYS_ASSERT((nc>0) ^ ((ni>0) ^ ((ns>0) ^ ((nrL>0) && nrR>0))));
+  //AMREX_ALWAYS_ASSERT((nc>0) ^ ((ni>0) ^ ((ns>0) ^ ((nrL>0) && nrR>0))));
+  AMREX_ALWAYS_ASSERT(ni > 0); //only currently set up to work with isosurface
   if (nc>0)
   {
-    Abort();
-    
     int finestLevel = spc.numLevels() - 1;
     std::vector< std::pair<int,Box> > isects;
     FArrayBox mask;
@@ -38,7 +37,7 @@ GetSeedLocations (const StreamParticleContainer& spc, Vector<int>& faceData)
       for (MFIter mfi = spc.MakeMFIter(lev); mfi.isValid(); ++mfi)
       {
         const Box& tile_box  = mfi.tilebox();
-        if (AMREX_SPACEDIM<3 || tile_box.contains(IntVect(D_DECL(0,50,107)))) {
+        if (BL_SPACEDIM<3 || tile_box.contains(IntVect(AMREX_D_DECL(0,50,107)))) {
 
           mask.resize(tile_box,1);
           mask.setVal(1);
@@ -65,16 +64,16 @@ GetSeedLocations (const StreamParticleContainer& spc, Vector<int>& faceData)
   else if (ni>0)
   {
     // Read in isosurface
-    AMREX_ALWAYS_ASSERT(AMREX_SPACEDIM==3);
-    std::string isofile; pp.get("isofile",isofile);
-    Print() << "Reading isofile... " << isofile << std::endl;
+    //AMREX_ALWAYS_ASSERT(AMREX_SPACEDIM==3);
+    std::string isoFile; pp.get("isoFile",isoFile);
+    if (ParallelDescriptor::IOProcessor())
+      std::cerr << "Reading isoFile... " << isoFile << std::endl;
 
     std::ifstream ifs;
-    ifs.open(isofile.c_str());
+    ifs.open(isoFile.c_str());
     // AJA added dummy line read; sometimes time, sometimes `decimated'
     std::string topline;
     std::getline(ifs,topline);
-    //Print() << "topline = " << topline << std::endl;
     std::string line;
     std::getline(ifs,line);
     auto surfNames = Tokenize(line,std::string(", "));
@@ -88,46 +87,40 @@ GetSeedLocations (const StreamParticleContainer& spc, Vector<int>& faceData)
     int nSeedNodes = tnodes.box().numPts();
 
     Real* ndat = tnodes.dataPtr();
-    //Print() << "First few locs:" << std::endl;
     for (int i=0; i<nSeedNodes; ++i)
     {
       int o=i*nCompSeedNodes;
       locs.push_back({AMREX_D_DECL(ndat[o+0], ndat[o+1], ndat[o+2])});
-      /*
-      if (i<13) {
-	Print() << locs[i][0] << " " << locs[i][1] << " " << locs[i][2] << std::endl;
-      }
-      */
     }
     tnodes.clear();
 
+    
+    //Vector<int> faceData(nElts*nodesPerElt);
     faceData.resize(nElts*nodesPerElt);
     ifs.read((char*)faceData.dataPtr(),sizeof(int)*faceData.size());
     ifs.close();
   }
   else if (pp.countval("seedLoc")>0)
   {
-    Abort();
-    Vector<Real> loc(AMREX_SPACEDIM);
-    pp.getarr("seedLoc",loc,0,AMREX_SPACEDIM);
+    Vector<Real> loc(BL_SPACEDIM);
+    pp.getarr("seedLoc",loc,0,BL_SPACEDIM);
     locs.push_back({AMREX_D_DECL(loc[0], loc[1], loc[2])});
   }
   else
   {
-    Abort();
     int seedRakeNum;
     pp.get("seedRakeNum",seedRakeNum);
     AMREX_ALWAYS_ASSERT(seedRakeNum >= 2);
-    Vector<Real> locL(AMREX_SPACEDIM), locR(AMREX_SPACEDIM);
-    pp.getarr("seedRakeL",locL,0,AMREX_SPACEDIM);
-    pp.getarr("seedRakeR",locR,0,AMREX_SPACEDIM);
+    Vector<Real> locL(BL_SPACEDIM), locR(BL_SPACEDIM);
+    pp.getarr("seedRakeL",locL,0,BL_SPACEDIM);
+    pp.getarr("seedRakeR",locR,0,BL_SPACEDIM);
 
     for (int i=0; i<seedRakeNum; ++i) {
       locs.push_back({AMREX_D_DECL(locL[0] + (i/double(seedRakeNum-1))*(locR[0] - locL[0]),
                                    locL[1] + (i/double(seedRakeNum-1))*(locR[1] - locL[1]),
                                    locL[2] + (i/double(seedRakeNum-1))*(locR[2] - locL[2]))});
     }
-  }  
+  }
   return locs;
 }
 
@@ -140,15 +133,26 @@ main (int   argc,
     ParmParse pp;
 
     std::string infile; pp.get("infile",infile);
+    Vector<std::string> vectorVarNames(AMREX_SPACEDIM);
+    pp.getarr("vectorField",vectorVarNames);
+    int nVars= pp.countval("vars");
+    Vector<std::string> inVarNames(nVars);
+    pp.getarr("vars",inVarNames);
+    PlotFileData pf(infile);
+    int finestLevel = pf.finestLevel();
+    Vector<Geometry> geoms(finestLevel+1);
+    Vector<BoxArray> grids(finestLevel+1);
+    Vector<DistributionMapping> dms(finestLevel+1);
+    Vector<int> ratios(finestLevel);
+    int nComp = AMREX_SPACEDIM + nVars;
 
+    
+    
     // get base for output files
     std::string outfile = infile;
     pp.query("outfile",outfile);
-    //
-    int writeParticles(0);
-    pp.query("writeParticles",writeParticles);
-    std::string partfile = outfile+"_particles";
-    //
+
+    
     int writeStreams(0);
     pp.query("writeStreams",writeStreams);
     std::string streamfile = outfile+"_stream";
@@ -159,50 +163,14 @@ main (int   argc,
     std::string streamBinfile = outfile+"_streamBin";
     pp.query("streamBinfile",streamBinfile);
     
-    // sanity checks
-    if (inVarNames.size()!=DEF_FCOMP) 
-      Abort("inVarNames wrong size");
-    if (outVarNames.size()!=DEF_FCOMP) 
-      Abort("outVarNames wrong size");
-    // AJA - hardwired variables - inVarNames moved to StreamPC.H
-    Print() << "infile = " << infile << std::endl;
-    Print() << "Variables:" << std::endl;
-    for (int i=0; i<inVarNames.size(); i++) 
-      Print() << "  " << i << " " << inVarNames[i] << std::endl;
-    Print() << "outfile = " << outfile << std::endl;
-    Print() << "Variables:" << std::endl;
-    for (int i=0; i<outVarNames.size(); i++) 
-      Print() << "  " << i << " " << outVarNames[i] << std::endl;
-
-    if (writeParticles)
-      Print() << "Will write particles to " << partfile << std::endl;
-    else
-      Print() << "(Not writing particles)" << std::endl;
-
-    if (writeStreams)
-      Print() << "Will write streams to " << streamfile << std::endl;
-    else
-      Print() << "(Not writing streams)" << std::endl;
-
-    if (writeStreamBin)
-      Print() << "Will write binary streams to " << streamfile << std::endl;
-    else
-      Print() << "(Not writing binary streams)" << std::endl;
-
-    //
-    //
-    //
-    PlotFileData pf(infile);
-    int finestLevel = pf.finestLevel();
-    Vector<Geometry> geoms(finestLevel+1);
-    Vector<BoxArray> grids(finestLevel+1);
-    Vector<DistributionMapping> dms(finestLevel+1);
-    Vector<int> ratios(finestLevel);
-
-    Vector<int> pp_is_per(AMREX_SPACEDIM);
-    pp.getarr("is_per",pp_is_per,0,AMREX_SPACEDIM);
-    Array<int,AMREX_SPACEDIM> is_per = {D_DECL(pp_is_per[0], pp_is_per[1], pp_is_per[2])};
-
+    Vector<std::string> outVarNames = {AMREX_D_DECL("X","Y","Z")};
+    for (int n = 0; n < nVars; n++) {
+      outVarNames.push_back(inVarNames[n]);
+    }
+    
+    IntVect pp_is_per;
+    pp.getarr("is_per",pp_is_per);
+    Array<int,AMREX_SPACEDIM> is_per = {AMREX_D_DECL(pp_is_per[0],pp_is_per[1],pp_is_per[2])};
     RealBox rb(pf.probLo(),pf.probHi());
 
     int Nlev = finestLevel + 1;
@@ -213,12 +181,15 @@ main (int   argc,
       dms[lev] = pf.DistributionMap(lev);
       if (lev < finestLevel) ratios[lev] = pf.refRatio(lev);
 
-      pfdata[lev].resize(DEF_FCOMP);
-      for (int d=0; d<DEF_FCOMP; ++d) {
-        pfdata[lev][d] = pf.get(lev,inVarNames[d]);
+      pfdata[lev].resize(nComp);
+      for (int d=0; d<AMREX_SPACEDIM; ++d) {
+        pfdata[lev][d] = pf.get(lev,vectorVarNames[d]);
+      }
+      for (int n = 0; n < nVars; n++) {
+	pfdata[lev][n+AMREX_SPACEDIM] = pf.get(lev,inVarNames[n]);
       }
     }
-
+      
     Real time=0;
     PhysBCFunctNoOp f;
     PCInterp cbi;
@@ -226,21 +197,17 @@ main (int   argc,
     int nGrow = 3;
     pp.query("nGrow",nGrow);
     AMREX_ALWAYS_ASSERT(nGrow>=1);
-    int nComp = inVarNames.size();
     Vector<MultiFab> vectorField(Nlev);
     for (int lev=0; lev<Nlev; ++lev) {
       vectorField[lev].define(grids[lev],dms[lev],nComp,nGrow);
-      for (int iComp=0; iComp<DEF_FCOMP; ++iComp) {
+      for (int d=0; d<nComp; ++d) {
         if (lev==0) {
-          FillPatchSingleLevel(vectorField[lev],time,
-			       {&pfdata[lev][iComp]},{time},0,iComp,1,geoms[0],f,0);
+          FillPatchSingleLevel(vectorField[lev],time,{&pfdata[lev][d]},{time},0,d,1,geoms[0],f,0);
         }
         else
         {
-          FillPatchTwoLevels(vectorField[lev],time,{&pfdata[lev-1][iComp]},{time},
-			     {&pfdata[lev][iComp]},{time},0,iComp,1,
-                             geoms[lev-1],geoms[lev],f,0,f,0,
-			     ratios[lev-1]*IntVect::Unit,&cbi,{bc},0);
+          FillPatchTwoLevels(vectorField[lev],time,{&pfdata[lev-1][d]},{time},{&pfdata[lev][d]},{time},0,d,1,
+                             geoms[lev-1],geoms[lev],f,0,f,0,ratios[lev-1]*IntVect::Unit,&cbi,{bc},0);
         }
       }
       vectorField[lev].FillBoundary(geoms[lev].periodicity());
@@ -248,18 +215,16 @@ main (int   argc,
 
     int Nsteps = 50;
     pp.query("Nsteps",Nsteps);
-    StreamParticleContainer spc(Nsteps+1,geoms,dms,grids,ratios);
-
-    // Get seed locations
-    Print() << "Getting seed locations..." << std::endl;
+    StreamParticleContainer spc(Nsteps,geoms,dms,grids,ratios,nComp,pp_is_per,outVarNames);
+    
     Vector<int> faceData;
     auto locs = GetSeedLocations(spc,faceData);
     int nStreamPairs = locs.size();
-
     // Initialise particles
-    Print() << "Initiating particles..." << std::endl;
+    Print() << "Initialising particles..." << std::endl;
     spc.InitParticles(locs);
 
+    Print() << "Checking if initialised properly..." << std::endl;
     // Check initialisation went ok
     spc.InspectParticles(nStreamPairs);
 
@@ -273,49 +238,36 @@ main (int   argc,
     else 
       Print() << "spc OK (before)" << std::endl;
 
-    // Follow streams, interpolating as we go
     Print() << "Computing streams and interpolating..." << std::endl;
     Real hRK = 0.1; pp.query("hRK",hRK);
-    AMREX_ALWAYS_ASSERT(hRK>0 && hRK<=0.5);
+    AMREX_ALWAYS_ASSERT(hRK>=0 && hRK<=0.5);
     Real dt = hRK * geoms[finestLevel].CellSize()[0];
-
-    for (int step=0; step<Nsteps; ++step) {
-
+    for (int step=0; step<Nsteps-1; ++step)
+    {
       // find next location
       spc.ComputeNextLocation(step,dt,vectorField);
 
       // interpolate all data
       spc.InterpDataAtLocation(step+1,vectorField);
-#if 0
-      // check still ok 
-      if (!spc.OK())
-	Print() << "spc not OK (during; step = " << step << ")" << std::endl;
-#endif
+
     }
-    
+
     // check in again
     spc.InspectParticles(nStreamPairs);
     if (!spc.OK())
       Print() << "spc not OK (after)" << std::endl;
     else 
       Print() << "spc OK (after)" << std::endl;
-    
-    //
-    // Write particles
-    //
-    if (writeParticles) {
-      spc.WritePlotFile(partfile, "particles");
-    }
 
-    //
-    // Write streams
-    //
+    
+    //std::string outfile = "junkPlt";
+    //Print() << "Writing particles to " << outfile << std::endl;
+    //spc.WritePlotFile(outfile, "particles");
     if (writeStreams) {
       Print() << "Writing streamlines in Tecplot ascii format to " << streamfile << std::endl;
       spc.WriteStreamAsTecplot(streamfile);
     }
-
-    //
+        //
     // Write streamBin
     //
     if (writeStreamBin) {

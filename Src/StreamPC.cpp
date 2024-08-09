@@ -8,23 +8,26 @@
 
 using namespace amrex;
 
-typedef Array<Real,AMREX_SPACEDIM> dim3;
-typedef Array<int,AMREX_SPACEDIM> int3;
-
 StreamParticleContainer::
 StreamParticleContainer(int                                 a_nPtsOnStrm,
                         const Vector<Geometry>            & a_geoms,
                         const Vector<DistributionMapping> & a_dmaps,
                         const Vector<BoxArray>            & a_bas,
-                        const Vector<int>                 & a_rrs)
-  : ParticleContainer<0, DEF_PCOMP, 0, 0> (a_geoms, a_dmaps, a_bas, a_rrs)
+                        const Vector<int>                 & a_rrs,
+			const int                         a_nVar,
+			const IntVect                     a_is_per,
+			const Vector<std::string>         & a_outVarNames)
+  : ParticleContainer<0, 3, 0, 0> (a_geoms, a_dmaps, a_bas, a_rrs)
 {
   Nlev = a_geoms.size();
   nPtsOnStrm = a_nPtsOnStrm;
-  sizeOfRealStreamData = nPtsOnStrm * DEF_PCOMP;
-  for (int i=0; i<sizeOfRealStreamData; ++i) {
-    AddRealComp(true);
-  }
+  fcomp = a_nVar;
+  pcomp = AMREX_SPACEDIM + fcomp;
+  sizeOfRealStreamData = nPtsOnStrm * pcomp;
+  is_per = a_is_per;
+  outVarNames = a_outVarNames;
+  ResizeRuntimeRealComp(sizeOfRealStreamData,true);
+
   for (int lev=0; lev<numLevels(); ++lev)
   {
     for (MFIter mfi = MakeMFIter(lev); mfi.isValid(); ++mfi)
@@ -41,7 +44,7 @@ InitParticles (const Vector<Vector<Real>>& locs)
   BL_PROFILE("StreamParticleContainer::InitParticles");
 
   int streamLoc = 0;
-  int offset = DEF_PCOMP*streamLoc;
+  int offset = pcomp*streamLoc;
 
   int lev = 0;
   int grid_id = 0;
@@ -65,7 +68,7 @@ InitParticles (const Vector<Vector<Real>>& locs)
         AMREX_D_EXPR(p.pos(0) = loc[0],
                      p.pos(1) = loc[1],
                      p.pos(2) = loc[2]);
-	
+
         p.idata(0) = streamLoc;                  // Current position
         p.idata(1) = i_part==0 ? +1 : -1;        // Direction of integration
         p.idata(2) = ppair[ i_part==0 ? 1 : 0];  // Other line from this seed
@@ -73,9 +76,10 @@ InitParticles (const Vector<Vector<Real>>& locs)
         particle_tile.push_back(p);
 
         auto& soa = particle_tile.GetStructOfArrays();
-        for (int i=0; i<NumRuntimeRealComps(); ++i) {
-	  soa.GetRealData(i).push_back(i<AMREX_SPACEDIM ? loc[i] : 0);
-	}
+        for (int i=0; i<NumRuntimeRealComps(); ++i)
+        {
+          soa.GetRealData(i).push_back(i<AMREX_SPACEDIM ? loc[i] : 0);
+        }
       }
     }
   }
@@ -90,13 +94,13 @@ SetParticleLocation(int a_streamLoc, int a_nGrow)
 
   AMREX_ALWAYS_ASSERT(a_nGrow > 0);
   bool redist = false;
-  int offset = DEF_PCOMP * a_streamLoc;
+  int offset = pcomp * a_streamLoc;
   dim3 newpos, blo, bhi;
   for (int lev = 0; lev < Nlev; ++lev)
   {
     const auto& geom = Geom(lev);
-    const auto& dx   = geom.CellSize();
-    const auto& plo  = geom.ProbLo();
+    const auto& dx = geom.CellSize();
+    const auto& plo = geom.ProbLo();
 
     for (MyParIter pti(*this, lev); pti.isValid(); ++pti)
     {
@@ -118,8 +122,6 @@ SetParticleLocation(int a_streamLoc, int a_nGrow)
         ParticleType& p = aos[pindex];
         if (p.id() > 0)
         {
-	  int pId = p.id();
-
           newpos = {AMREX_D_DECL(soa.GetRealData(offset + RealData::xloc)[pindex],
                                  soa.GetRealData(offset + RealData::yloc)[pindex],
                                  soa.GetRealData(offset + RealData::zloc)[pindex])};
@@ -134,21 +136,21 @@ SetParticleLocation(int a_streamLoc, int a_nGrow)
       }
     }
   }
-
   ParallelDescriptor::ReduceBoolOr(redist);
   if (redist) {
+    //Print() << "  redistributing" << std::endl;
     Redistribute();
   }
 }
 
 static void vnrml(Vector<Real>& vec, int dir)
 {
-  static Real eps = 1.e-12;
-  Real sum = AMREX_D_TERM(  vec[0] * vec[0],
+  static Real eps = 1.e12;
+  Real sum = AMREX_D_TERM(vec[0] * vec[0],
                           + vec[1] * vec[1],
                           + vec[2] * vec[2]);
-  Vector<Real> u = vec;
-  if (sum > eps) {
+  //  Vector<Real> u = vec;
+  if (sum < eps) {
     sum = 1. / std::sqrt(sum);
     for (int i=0; i<AMREX_SPACEDIM; ++i) vec[i] *= dir * sum;
   }
@@ -158,10 +160,10 @@ static void vnrml(Vector<Real>& vec, int dir)
 }
 
 static bool ntrpv(const dim3& x,const FArrayBox& gfab,
-                  const Real* dx,const Real* plo,const Real* phi,Vector<Real>& u,int nComp)
+                  const Real* dx,const Real* plo,const Real* phi,Vector<Real>& u, int nComp)
 {
-  int3 b; // node based index of lower-left corner of cell
-  dim3 n; // interpolation factor in [0,1]^3
+  int3 b;
+  dim3 n;
 
   for (int d=0; d<AMREX_SPACEDIM; ++d) {
     b[d] = std::floor( (x[d] - plo[d]) / dx[d] - 0.5 );
@@ -181,7 +183,6 @@ static bool ntrpv(const dim3& x,const FArrayBox& gfab,
       return false;
     }
   }
-
   const auto& g = gfab.array();
   for (int i=0; i<nComp; ++i) {
 #if AMREX_SPACEDIM == 2
@@ -205,13 +206,13 @@ static bool ntrpv(const dim3& x,const FArrayBox& gfab,
   return true;
 }
 
-static bool
+bool
+StreamParticleContainer::
 RK4(dim3 & x,Real dt,const FArrayBox& v,const Real* dx,const Real* plo,const Real* phi,int dir)
 {
   Vector<Real> vec(AMREX_SPACEDIM);
   dim3 k1, k2, k3, k4;
   dim3 xx = x;
-  
   if (!ntrpv(xx,v,dx,plo,phi,vec,AMREX_SPACEDIM)) return false;
   vnrml(vec,dir);
 
@@ -244,19 +245,13 @@ RK4(dim3 & x,Real dt,const FArrayBox& v,const Real* dx,const Real* plo,const Rea
     delta[d] = (k1[d] + k4[d])*sixth + (k2[d] + k3[d])*third;
   }
 
-  // just do basic update without dealing with domain...
-  for (int d=0; d<AMREX_SPACEDIM; ++d)
-    x[d] += delta[d];
-  
-  /* Old way to control domain; hacked out by aja
-
-  // cut step length to keep in domain (FIXME: Deal with periodic)
+  // cut step length to keep in domain (FIXME: Deal with periodic - hopefully fixed?)
   Real scale = 1;
   for (int d=0; d<AMREX_SPACEDIM; ++d) {
-    if (x[d]+delta[d] < plo[d]) {
+    if ((x[d]+delta[d] < plo[d]) && (is_per[d] == 0)) {
       scale = std::min(scale, std::abs((x[d] - plo[d])/delta[d]));
     }
-    if (x[d]+delta[d] > plo[d]) {
+    if ((x[d]+delta[d] > plo[d]) && (is_per[d] == 0)) {
       scale = std::min(scale, std::abs((phi[d] - x[d])/delta[d]));
     }
   }
@@ -264,9 +259,6 @@ RK4(dim3 & x,Real dt,const FArrayBox& v,const Real* dx,const Real* plo,const Rea
     x[d] += scale * delta[d];
     x[d] = std::min(phi[d]-1.e-10, std::max(plo[d]+1.e-10, x[d]) ); // Deal with precision issues
   }
-
-  */
-  
   return true;
 }
 
@@ -282,7 +274,7 @@ ComputeNextLocation(int                      a_fromLoc,
   SetParticleLocation(a_fromLoc,nGrow);
 
   const int new_loc_id = a_fromLoc + 1;
-  int offset = DEF_PCOMP * new_loc_id;
+  int offset = pcomp * new_loc_id;
 
   for (int lev = 0; lev < Nlev; ++lev)
   {
@@ -300,10 +292,7 @@ ComputeNextLocation(int                      a_fromLoc,
       for (int pindex=0; pindex<aos.size(); ++pindex)
       {
         ParticleType& p = aos[pindex];
-	
-	int pId = p.id();
-	
-	const int dir = p.idata(1);
+        const int dir = p.idata(1);
         dim3 x = {AMREX_D_DECL(p.pos(0), p.pos(1), p.pos(2))};
         if (p.id() > 0)
         {
@@ -312,7 +301,6 @@ ComputeNextLocation(int                      a_fromLoc,
             Abort("bad RK");
           }
         }
-	// put particle position into stream
         AMREX_D_EXPR(soa.GetRealData(offset + RealData::xloc)[pindex] = x[0],
                      soa.GetRealData(offset + RealData::yloc)[pindex] = x[1],
                      soa.GetRealData(offset + RealData::zloc)[pindex] = x[2]);
@@ -331,7 +319,7 @@ InterpDataAtLocation(int                      a_fromLoc,
   const int nGrow = a_vectorField[0].nGrow();
   SetParticleLocation(a_fromLoc,nGrow);
 
-  int offset = DEF_PCOMP * a_fromLoc; // components on particle
+  int offset = pcomp * a_fromLoc; // components on particle
 
   for (int lev = 0; lev < Nlev; ++lev)
   {
@@ -343,8 +331,6 @@ InterpDataAtLocation(int                      a_fromLoc,
     dim3 Lx;
     for (int iComp=0; iComp<AMREX_SPACEDIM; iComp++)
       Lx[iComp] = phi[iComp]-plo[iComp];
-
-    //Print() << "Lx = " << Lx << std::endl;
 
     for (MyParIter pti(*this, lev); pti.isValid(); ++pti)
     {
@@ -360,16 +346,16 @@ InterpDataAtLocation(int                      a_fromLoc,
 
 	  // where's the particle?
 	  dim3 x = {AMREX_D_DECL(p.pos(0), p.pos(1), p.pos(2))};
-	  Vector<Real> ntrpvOut(DEF_FCOMP); // components in infile
+	  Vector<Real> ntrpvOut(fcomp); // components in infile
 
 	  // interpolate all data to particle location
-	  ntrpv(x,v,dx,plo,phi,ntrpvOut,DEF_FCOMP); // components in infile
+	  ntrpv(x,v,dx,plo,phi,ntrpvOut,fcomp); // components in infile
 
 	  // copy the interpolated data to the particle
 	  // first DIM components are particle location
 	  // next DIM components are stream location w/o adjusting for periodicity
 	  // then we have the interpolated data we want
-	  for (int iComp=AMREX_SPACEDIM; iComp<DEF_FCOMP; ++iComp) {
+	  for (int iComp=AMREX_SPACEDIM; iComp<fcomp; ++iComp) {
 	    int idxOnPart = offset + iComp + AMREX_SPACEDIM;
 	    soa.GetRealData(idxOnPart)[pindex] = ntrpvOut[iComp];
 	  }
@@ -385,7 +371,7 @@ InterpDataAtLocation(int                      a_fromLoc,
 	    // adjust delta if it's affected by periodicity (i.e. delta too big)
 	    for (int d=0; d<AMREX_SPACEDIM; ++d) {
 	      int  idx    = offset + d;
-	      int  idxOld = idx - DEF_PCOMP;
+	      int  idxOld = idx - pcomp;
 	      Real xnew   = soa.GetRealData(idx   )[pindex];
 	      Real xold   = soa.GetRealData(idxOld)[pindex];
 	      Real delta  = xnew-xold;
@@ -408,6 +394,7 @@ InterpDataAtLocation(int                      a_fromLoc,
     }
   }
 }
+
 
 void
 StreamParticleContainer::
@@ -445,14 +432,12 @@ WriteStreamAsTecplot(const std::string& outFile)
     std::string fileName = outFile + "/str_";
     fileName = Concatenate(fileName,myProc) + ".dat";
     std::ofstream ofs(fileName.c_str());
-
     ofs << "VARIABLES = ";
-    for (int iComp=0; iComp<DEF_FCOMP; ++iComp)
+    for (int iComp=0; iComp<fcomp; ++iComp)
       ofs << outVarNames[iComp] << " ";
     ofs << '\n';
+
     
-    int minId=100000000;
-    int maxId=-minId;
     for (int lev = 0; lev < Nlev; ++lev)
     {
       for (MyParIter pti(*this, lev); pti.isValid(); ++pti)
@@ -462,190 +447,21 @@ WriteStreamAsTecplot(const std::string& outFile)
 
         for (int pindex=0; pindex<aos.size(); ++pindex)
         {
-	  ParticleType& p = aos[pindex];
-	  if (p.id()>0) {
-	    int pId = p.id();
-	    minId=min(minId,pId);
-	    maxId=max(maxId,pId);
-
-	    ofs << "ZONE I=1 J=" << nPtsOnStrm << " K=1 FORMAT=POINT\n";
-	    for (int j=0; j<nPtsOnStrm; ++j)
-	      {
-		// by including the spacedim offset, we use locations w/o periodicity adjustments
-		int offset = j*DEF_PCOMP + AMREX_SPACEDIM;
-		for (int iComp=0; iComp<DEF_FCOMP; ++iComp) {
-		  ofs << soa.GetRealData(offset + iComp)[pindex] << " ";
-		}
-		ofs << '\n';
-	      }
-	  }
+          ofs << "ZONE I=1 J=" << nPtsOnStrm << " K=1 FORMAT=POINT\n";
+          for (int j=0; j<nPtsOnStrm; ++j)
+          {
+	    // by including the spacedim offset, we use locations w/o periodicity adjustments
+	    int offset = j*pcomp + AMREX_SPACEDIM;
+	    //std::cout << offset << std::endl;
+	    for (int iComp=0; iComp<fcomp; ++iComp) {
+	      ofs << soa.GetRealData(offset + iComp)[pindex] << " ";
+	    }
+	    ofs << '\n';
+		
+          }
         }
       }
     }
-    ofs.close();
-    ParallelDescriptor::ReduceIntMin(minId);
-    ParallelDescriptor::ReduceIntMax(maxId);
-    //if (ParallelDescriptor::IOProcessor())
-    //printf("writeTec: minId / maxId = %i / %i\n",minId,maxId);
-  }
-}
-
-void
-StreamParticleContainer::
-WriteStreamAsBinary(const std::string& outFile,
-		    Vector<int>& faceData,
-		    const int nStreamPairs)
-{
-  // Set location to first point on stream to guarantee partner line is local
-  SetParticleLocation(0,1);
-
-  // Create a folder and have each processor write their own data, one file per streamline
-  auto myProc = ParallelDescriptor::MyProc();
-  auto nProcs = ParallelDescriptor::NProcs();
-
-  if (!amrex::UtilCreateDirectory(outFile, 0755))
-    amrex::CreateDirectoryFailed(outFile);
-  ParallelDescriptor::Barrier();
-
-  bool will_write = false;
-  for (int lev = 0; lev < Nlev && !will_write; ++lev)
-  {
-    for (MyParIter pti(*this, lev); pti.isValid() && !will_write; ++pti)
-    {
-      auto& aos = pti.GetArrayOfStructs();
-      auto& soa = pti.GetStructOfArrays();
-
-      for (int pindex=0; pindex<aos.size() && !will_write; ++pindex)
-      {
-        ParticleType& p = aos[pindex];
-        will_write |= (p.id() > 0);
-      }
-
-    }
-  }
-  
-  // Need to count the total number of streams to be written
-  // by all ptiters on all levels on this processor
-  int nStreams = 0;
-  int nStreamsCheck = 0;
-    
-  for (int lev = 0; lev < Nlev; ++lev) {
-    for (MyParIter pti(*this, lev); pti.isValid(); ++pti) {
-      auto& aos = pti.GetArrayOfStructs();
-      for (int pindex=0; pindex<aos.size(); ++pindex) {
-	ParticleType& p = aos[pindex];
-	if ( (p.id()>0) && (p.idata(1)==1) ) {
-	  nStreams++;
-	}
-      }
-    }
-  }
-  
-  // write to a binary file
-  std::string rootName = outFile + "/str_";
-  std::string fileName = Concatenate(rootName,myProc) + ".bin";
-  //std::string headName = Concatenate(rootName,myProc) + ".head";
-  FILE *file=fopen(fileName.c_str(),"w");
-  //FILE *head=fopen(headName.c_str(),"w");
-  // total number of streams in file
-  fwrite(&(nStreams),sizeof(int),1,file);
-  
-  int minId=100000000;
-  int maxId=-minId;
-  for (int lev = 0; lev < Nlev; ++lev) {
-
-    for (MyParIter pti(*this, lev); pti.isValid(); ++pti) {
-      auto& aos = pti.GetArrayOfStructs();
-      auto& soa = pti.GetStructOfArrays();
-      
-      int aosSize = aos.size();
-      
-      // construct the pair mapping for this pti
-      Vector<int> pIdMap(2*nStreamPairs+1);
-      for (int pindex=0; pindex<aosSize; ++pindex) {
-	ParticleType& p = aos[pindex];
-	int pId = p.id();
-	int pairId = p.idata(2);
-	if (pId>0) {
-	  pIdMap[pairId]=pindex;
-	}
-      }
-      
-      for (int pindex=0; pindex<aosSize; ++pindex) {
-	ParticleType& p = aos[pindex];	  
-	int pId         = p.id();
-	int dir         = p.idata(1);
-	int pairId      = p.idata(2);
-	
-	if ( (pId>0) && (dir==1) ) {
-	  // write info about this stream and its pair
-	  int pindexPair      = pIdMap[pId];
-	  ParticleType& pPair = aos[pindexPair];
-	  int pIdPair         = pPair.id();
-	  int dirPair         = pPair.idata(1);
-	  int pairIdPair      = pPair.idata(2);
-	  
-	  // sanity check
-	  if ( ( pIdPair != pairId ) || ( pId != pairIdPair ) ) 
-	    Abort("Bad pair mapping");
-	  
-	  // back out the original id from the surface (both count from 1)
-	  int pIdInv = (pId+1)/2;
-	  fwrite(&(pIdInv),sizeof(int),1,file); // pair id
-	  
-	  //fprintf(head,"%i %i %i\n",pId,dir,pairId);
-	  
-	  minId=min(minId,pId);
-	  maxId=max(maxId,pId);
-	  
-	  // if we write in the order paricle->component->position on surface,
-	  // then end up with a single-component stream together in memory
-	  // by including spacedim in offset, we use locations w/o periodicity adjustments
-	  
-	  for (int iComp=0; iComp<DEF_FCOMP; iComp++) {
-	    // first write pair (dir=-1) backwards (without double writing surface)
-	    for (int j=nPtsOnStrm-1; j>0; j--) {
-	      int offset = j*DEF_PCOMP + iComp + AMREX_SPACEDIM;
-	      fwrite(&(soa.GetRealData(offset)[pindexPair]),sizeof(Real),1,file);
-	    }
-	    // now write this particle's (dir=1) data (with surface)
-	    for (int j=0; j<nPtsOnStrm; j++) {
-	      int offset = j*DEF_PCOMP + iComp + AMREX_SPACEDIM;
-	      fwrite(&(soa.GetRealData(offset)[pindex]),sizeof(Real),1,file);
-	    }
-	  }
-	  
-	  nStreamsCheck++; // sanity check to make sure we wrote number of streams anticipated
-	  
-	}
-      }
-    }
-  }
-  ParallelDescriptor::ReduceIntMin(minId);
-  ParallelDescriptor::ReduceIntMax(maxId);
-  
-  if (nStreams!=nStreamsCheck)
-    std::cout << "(nStreams!=nStreamsCheck) : "
-	      << nStreams << " != "  << nStreamsCheck << std::endl;
-  
-  fclose(file);
-  
-  // Write header file with everything consistent across all processors
-  ParallelDescriptor::ReduceIntSum(nStreams);
-  if (ParallelDescriptor::IOProcessor()) {
-    std::string fileName = outFile + "/Header";
-    std::ofstream ofs(fileName.c_str());
-    ofs << "Even odder-ball replacement for sampled streams" << std::endl;
-    ofs << nProcs << std::endl;         // translates to number of files to read
-    ofs << nStreams << std::endl;       // total number of streams
-    ofs << 2*nPtsOnStrm-1 << std::endl; // number of points
-    ofs << DEF_FCOMP << std::endl;      // number of variables
-    for (int iComp=0; iComp<DEF_FCOMP; ++iComp)
-      ofs << outVarNames[iComp] << " ";
-    ofs << std::endl;
-    ofs << faceData.size() << std::endl;
-    ofs.write((char*)faceData.dataPtr(),sizeof(int)*faceData.size());
-    ofs << '\n';
     ofs.close();
   }
 }
@@ -788,4 +604,166 @@ InspectParticles (const int nStreamPairs)
     Print() << "No duplicate particles :-)" << std::endl;
   }
   
+}
+
+
+
+void
+StreamParticleContainer::
+WriteStreamAsBinary(const std::string& outFile,
+		    Vector<int>& faceData,
+		    const int nStreamPairs)
+{
+  // Set location to first point on stream to guarantee partner line is local
+  SetParticleLocation(0,1);
+
+  // Create a folder and have each processor write their own data, one file per streamline
+  auto myProc = ParallelDescriptor::MyProc();
+  auto nProcs = ParallelDescriptor::NProcs();
+
+  if (!amrex::UtilCreateDirectory(outFile, 0755))
+    amrex::CreateDirectoryFailed(outFile);
+  ParallelDescriptor::Barrier();
+
+  bool will_write = false;
+  for (int lev = 0; lev < Nlev && !will_write; ++lev)
+  {
+    for (MyParIter pti(*this, lev); pti.isValid() && !will_write; ++pti)
+    {
+      auto& aos = pti.GetArrayOfStructs();
+      auto& soa = pti.GetStructOfArrays();
+
+      for (int pindex=0; pindex<aos.size() && !will_write; ++pindex)
+      {
+        ParticleType& p = aos[pindex];
+        will_write |= (p.id() > 0);
+      }
+
+    }
+  }
+  
+  // Need to count the total number of streams to be written
+  // by all ptiters on all levels on this processor
+  int nStreams = 0;
+  int nStreamsCheck = 0;
+    
+  for (int lev = 0; lev < Nlev; ++lev) {
+    for (MyParIter pti(*this, lev); pti.isValid(); ++pti) {
+      auto& aos = pti.GetArrayOfStructs();
+      for (int pindex=0; pindex<aos.size(); ++pindex) {
+	ParticleType& p = aos[pindex];
+	if ( (p.id()>0) && (p.idata(1)==1) ) {
+	  nStreams++;
+	}
+      }
+    }
+  }
+  
+  // write to a binary file
+  std::string rootName = outFile + "/str_";
+  std::string fileName = Concatenate(rootName,myProc) + ".bin";
+  //std::string headName = Concatenate(rootName,myProc) + ".head";
+  FILE *file=fopen(fileName.c_str(),"w");
+  //FILE *head=fopen(headName.c_str(),"w");
+  // total number of streams in file
+  fwrite(&(nStreams),sizeof(int),1,file);
+  
+  int minId=100000000;
+  int maxId=-minId;
+  for (int lev = 0; lev < Nlev; ++lev) {
+
+    for (MyParIter pti(*this, lev); pti.isValid(); ++pti) {
+      auto& aos = pti.GetArrayOfStructs();
+      auto& soa = pti.GetStructOfArrays();
+      
+      int aosSize = aos.size();
+      
+      // construct the pair mapping for this pti
+      Vector<int> pIdMap(2*nStreamPairs+1);
+      for (int pindex=0; pindex<aosSize; ++pindex) {
+	ParticleType& p = aos[pindex];
+	int pId = p.id();
+	int pairId = p.idata(2);
+	if (pId>0) {
+	  pIdMap[pairId]=pindex;
+	}
+      }
+      
+      for (int pindex=0; pindex<aosSize; ++pindex) {
+	ParticleType& p = aos[pindex];	  
+	int pId         = p.id();
+	int dir         = p.idata(1);
+	int pairId      = p.idata(2);
+	
+	if ( (pId>0) && (dir==1) ) {
+	  // write info about this stream and its pair
+	  int pindexPair      = pIdMap[pId];
+	  ParticleType& pPair = aos[pindexPair];
+	  int pIdPair         = pPair.id();
+	  int dirPair         = pPair.idata(1);
+	  int pairIdPair      = pPair.idata(2);
+	  
+	  // sanity check
+	  if ( ( pIdPair != pairId ) || ( pId != pairIdPair ) ) 
+	    Abort("Bad pair mapping");
+	  
+	  // back out the original id from the surface (both count from 1)
+	  int pIdInv = (pId+1)/2;
+	  fwrite(&(pIdInv),sizeof(int),1,file); // pair id
+	  
+	  //fprintf(head,"%i %i %i\n",pId,dir,pairId);
+	  
+	  minId=min(minId,pId);
+	  maxId=max(maxId,pId);
+	  
+	  // if we write in the order paricle->component->position on surface,
+	  // then end up with a single-component stream together in memory
+	  // by including spacedim in offset, we use locations w/o periodicity adjustments
+	  
+	  for (int iComp=0; iComp<fcomp; iComp++) {
+	    // first write pair (dir=-1) backwards (without double writing surface)
+	    for (int j=nPtsOnStrm-1; j>0; j--) {
+	      int offset = j*pcomp + iComp + AMREX_SPACEDIM;
+	      fwrite(&(soa.GetRealData(offset)[pindexPair]),sizeof(Real),1,file);
+	    }
+	    // now write this particle's (dir=1) data (with surface)
+	    for (int j=0; j<nPtsOnStrm; j++) {
+	      int offset = j*pcomp + iComp + AMREX_SPACEDIM;
+	      fwrite(&(soa.GetRealData(offset)[pindex]),sizeof(Real),1,file);
+	    }
+	  }
+	  
+	  nStreamsCheck++; // sanity check to make sure we wrote number of streams anticipated
+	  
+	}
+      }
+    }
+  }
+  ParallelDescriptor::ReduceIntMin(minId);
+  ParallelDescriptor::ReduceIntMax(maxId);
+  
+  if (nStreams!=nStreamsCheck)
+    std::cout << "(nStreams!=nStreamsCheck) : "
+	      << nStreams << " != "  << nStreamsCheck << std::endl;
+  
+  fclose(file);
+  
+  // Write header file with everything consistent across all processors
+  ParallelDescriptor::ReduceIntSum(nStreams);
+  if (ParallelDescriptor::IOProcessor()) {
+    std::string fileName = outFile + "/Header";
+    std::ofstream ofs(fileName.c_str());
+    ofs << "Even odder-ball replacement for sampled streams" << std::endl;
+    ofs << nProcs << std::endl;         // translates to number of files to read
+    ofs << nStreams << std::endl;       // total number of streams
+    ofs << 2*nPtsOnStrm-1 << std::endl; // number of points
+    ofs << fcomp << std::endl;      // number of variables
+    for (int iComp=0; iComp<fcomp; ++iComp)
+      ofs << outVarNames[iComp] << " ";
+    ofs << std::endl;
+    ofs << faceData.size() << std::endl;
+    ofs.write((char*)faceData.dataPtr(),sizeof(int)*faceData.size());
+    ofs << '\n';
+    ofs.close();
+  }
 }

@@ -1,0 +1,8 @@
+infile= plt50000_prestream
+vectorFields= temp_gx temp_gy temp_gz
+isoFile= plt50000_temp_1200_1000000.mef
+vars= HeatRelease
+is_per= 0 1 0
+writeStreams= 1
+writeStreamBin= 1
+hRK= 0.4
