@@ -31,9 +31,9 @@ public:
 			   const amrex::IntVect                            a_is_per,
 			   const amrex::Vector<std::string>                & a_outVarNames);
 
-  void InitParticles(const amrex::Vector<amrex::Vector<amrex::Real>>& a_locs);
+  void InitParticles(const amrex::Vector<amrex::Vector<amrex::Real>>& a_locs, const int lev);
 
-  void SetParticleLocation(int a_streamPos, int a_nGrow);
+  void SetParticleLocation(int a_streamPos);//, int a_nGrow);
 
   void ComputeNextLocation(int                                    a_fromLoc,
                            amrex::Real                            a_delta_t,
@@ -52,8 +52,9 @@ public:
 
   bool RK4(dim3 & x,amrex::Real dt,const amrex::FArrayBox& v,const amrex::Real* dx,const amrex::Real* plo,const amrex::Real* phi,int dir);
 
-  void InspectParticles(const int nStreamPairs);
-  
+#if 0 //AJA inspect function 
+  void InspectParticles(const int nStreamPairs, const int redist);
+#endif
   
 protected:
   int Nlev;

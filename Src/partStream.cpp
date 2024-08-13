@@ -4,7 +4,6 @@
 #include <StreamPC.H>
 
 using namespace amrex;
-
 static
 Vector<Vector<Real>>
 GetSeedLocations (const StreamParticleContainer& spc, Vector<int>& faceData)
@@ -17,8 +16,7 @@ GetSeedLocations (const StreamParticleContainer& spc, Vector<int>& faceData)
   int ns=pp.countval("seedLoc");
   int nrL=pp.countval("seedRakeL");
   int nrR=pp.countval("seedRakeR");
-  //AMREX_ALWAYS_ASSERT((nc>0) ^ ((ni>0) ^ ((ns>0) ^ ((nrL>0) && nrR>0))));
-  AMREX_ALWAYS_ASSERT(ni > 0); //only currently set up to work with isosurface
+  AMREX_ALWAYS_ASSERT((nc>0) ^ ((ni>0) ^ ((ns>0) ^ ((nrL>0) && nrR>0))));
   if (nc>0)
   {
     int finestLevel = spc.numLevels() - 1;
@@ -64,7 +62,6 @@ GetSeedLocations (const StreamParticleContainer& spc, Vector<int>& faceData)
   else if (ni>0)
   {
     // Read in isosurface
-    //AMREX_ALWAYS_ASSERT(AMREX_SPACEDIM==3);
     std::string isoFile; pp.get("isoFile",isoFile);
     if (ParallelDescriptor::IOProcessor())
       std::cerr << "Reading isoFile... " << isoFile << std::endl;
@@ -94,8 +91,6 @@ GetSeedLocations (const StreamParticleContainer& spc, Vector<int>& faceData)
     }
     tnodes.clear();
 
-    
-    //Vector<int> faceData(nElts*nodesPerElt);
     faceData.resize(nElts*nodesPerElt);
     ifs.read((char*)faceData.dataPtr(),sizeof(int)*faceData.size());
     ifs.close();
@@ -152,7 +147,10 @@ main (int   argc,
     std::string outfile = infile;
     pp.query("outfile",outfile);
 
-    
+    int writeParticles(0);
+    pp.query("writeParticles",writeParticles);
+    std::string particlefile = outfile+"_particles";
+    pp.query("particlefile",particlefile);
     int writeStreams(0);
     pp.query("writeStreams",writeStreams);
     std::string streamfile = outfile+"_stream";
@@ -182,6 +180,7 @@ main (int   argc,
       if (lev < finestLevel) ratios[lev] = pf.refRatio(lev);
 
       pfdata[lev].resize(nComp);
+      Print() << "Loading data on level " << lev << std::endl;
       for (int d=0; d<AMREX_SPACEDIM; ++d) {
         pfdata[lev][d] = pf.get(lev,vectorVarNames[d]);
       }
@@ -219,25 +218,29 @@ main (int   argc,
     
     Vector<int> faceData;
     auto locs = GetSeedLocations(spc,faceData);
+    if (writeStreamBin == 1 && faceData.empty()) {
+      Abort("Writing stream binary without surface definition!");
+    }
     int nStreamPairs = locs.size();
     // Initialise particles
     Print() << "Initialising particles..." << std::endl;
-    spc.InitParticles(locs);
-
+    for (int lev = 0; lev < Nlev; lev++) {
+      spc.InitParticles(locs,lev);
+    }
+    //Check if particles initialised fine
+    spc.OK();
+    
+#if 0 //AJA 
     Print() << "Checking if initialised properly..." << std::endl;
     // Check initialisation went ok
-    spc.InspectParticles(nStreamPairs);
-
+    spc.InspectParticles(nStreamPairs,0);
+#endif
+    
     // Interpolate at start
     Print() << "Interpolation at the seed points..." << std::endl;
     spc.InterpDataAtLocation(0,vectorField);
 
-    // Check still ok
-    if (!spc.OK())
-      Print() << "spc not OK (before)" << std::endl;
-    else 
-      Print() << "spc OK (before)" << std::endl;
-
+    
     Print() << "Computing streams and interpolating..." << std::endl;
     Real hRK = 0.1; pp.query("hRK",hRK);
     AMREX_ALWAYS_ASSERT(hRK>=0 && hRK<=0.5);
@@ -253,16 +256,16 @@ main (int   argc,
     }
 
     // check in again
-    spc.InspectParticles(nStreamPairs);
-    if (!spc.OK())
-      Print() << "spc not OK (after)" << std::endl;
-    else 
-      Print() << "spc OK (after)" << std::endl;
-
+#if 0 //AJA checks
+    spc.InspectParticles(nStreamPairs,1);
+#endif
+    //check we didn't break them again
+    spc.OK();
     
-    //std::string outfile = "junkPlt";
-    //Print() << "Writing particles to " << outfile << std::endl;
-    //spc.WritePlotFile(outfile, "particles");
+    if (writeParticles) {
+      Print() << "Writing particles in plotfile to " << particlefile << std::endl;
+      spc.WritePlotFile(particlefile, "particles");
+    }
     if (writeStreams) {
       Print() << "Writing streamlines in Tecplot ascii format to " << streamfile << std::endl;
       spc.WriteStreamAsTecplot(streamfile);

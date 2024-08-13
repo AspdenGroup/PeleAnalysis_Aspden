@@ -27,97 +27,74 @@ StreamParticleContainer(int                                 a_nPtsOnStrm,
   is_per = a_is_per;
   outVarNames = a_outVarNames;
   ResizeRuntimeRealComp(sizeOfRealStreamData,true);
-
-  for (int lev=0; lev<numLevels(); ++lev)
-  {
-    for (MFIter mfi = MakeMFIter(lev); mfi.isValid(); ++mfi)
-    {
-      auto& particle_tile = DefineAndReturnParticleTile(lev, mfi.index(), mfi.LocalTileIndex());
-    }
-  }
 }
 
 void
 StreamParticleContainer::
-InitParticles (const Vector<Vector<Real>>& locs)
+InitParticles (const Vector<Vector<Real>>& locs, const int lev)
 {
   BL_PROFILE("StreamParticleContainer::InitParticles");
 
-  int streamLoc = 0;
-  int offset = pcomp*streamLoc;
-
-  int lev = 0;
-  int grid_id = 0;
-  int tile_id = 0;
-  int owner = ParticleDistributionMap(lev)[0];
-  auto& particle_tile = GetParticles(0)[std::make_pair(grid_id,tile_id)];
-
-  if (ParallelDescriptor::MyProc() == owner)
-  {
-    for (const auto& loc : locs)
-    {
+  const Geometry& geom = Geom(lev);
+  
+  for (MFIter mfi = MakeMFIter(lev); mfi.isValid(); ++mfi) {
+    const Box& tile_box  = mfi.tilebox();
+    const RealBox tile_realbox{tile_box, geom.CellSize(), geom.ProbLo()};
+    const int grid_id = mfi.index();
+    const int tile_id = mfi.LocalTileIndex();
+    auto& particle_tile = DefineAndReturnParticleTile(lev, grid_id, tile_id); 
+    for (const auto& loc : locs) {
+      XDim3 x = {AMREX_D_DECL(loc[0],loc[1],loc[2])};
+      //skip this location if not in this box
+      if (!tile_realbox.contains(x)) {
+	continue;
+      }
       // Keep track of pairs of lines
       Array<Long,2> ppair = {ParticleType::NextID(), ParticleType::NextID()};
-
+      
       for (int i_part=0; i_part<2; i_part++)
-      {
-        ParticleType p;
-        p.id()  = ppair[i_part];
-        p.cpu() = ParallelDescriptor::MyProc();
-
-        AMREX_D_EXPR(p.pos(0) = loc[0],
-                     p.pos(1) = loc[1],
-                     p.pos(2) = loc[2]);
-
-        p.idata(0) = streamLoc;                  // Current position
-        p.idata(1) = i_part==0 ? +1 : -1;        // Direction of integration
-        p.idata(2) = ppair[ i_part==0 ? 1 : 0];  // Other line from this seed
-
-        particle_tile.push_back(p);
-
-        auto& soa = particle_tile.GetStructOfArrays();
-        for (int i=0; i<NumRuntimeRealComps(); ++i)
-        {
-          soa.GetRealData(i).push_back(i<AMREX_SPACEDIM ? loc[i] : 0);
-        }
-      }
+	{
+	  ParticleType p;
+	  p.id()  = ppair[i_part];
+	  p.cpu() = ParallelDescriptor::MyProc();
+	  
+	  AMREX_D_EXPR(p.pos(0) = loc[0],
+		       p.pos(1) = loc[1],
+		       p.pos(2) = loc[2]);
+	  
+	  p.idata(0) = 0;                  // Current position
+	  p.idata(1) = i_part==0 ? +1 : -1;        // Direction of integration
+	  p.idata(2) = ppair[ i_part==0 ? 1 : 0];  // Other line from this seed
+	  
+	  particle_tile.push_back(p);
+	  for (int i = 0; i<NumRuntimeRealComps(); i++) {
+	    particle_tile.push_back_real(i, i < AMREX_SPACEDIM ? loc[i] : 0);
+	  }
+	  
+	}
     }
   }
-  Redistribute();
+
+  
 }
+
 
 void
 StreamParticleContainer::
-SetParticleLocation(int a_streamLoc, int a_nGrow)
+SetParticleLocation(const int a_streamLoc)
 {
   BL_PROFILE("StreamParticleContainer::SetParticleLocation");
 
-  AMREX_ALWAYS_ASSERT(a_nGrow > 0);
-  bool redist = false;
   int offset = pcomp * a_streamLoc;
-  dim3 newpos, blo, bhi;
+  dim3 newpos;
   for (int lev = 0; lev < Nlev; ++lev)
   {
-    const auto& geom = Geom(lev);
-    const auto& dx = geom.CellSize();
-    const auto& plo = geom.ProbLo();
-
     for (MyParIter pti(*this, lev); pti.isValid(); ++pti)
     {
       auto& aos = pti.GetArrayOfStructs();
       auto& soa = pti.GetStructOfArrays();
-      const auto vbx = grow(pti.validbox(),a_nGrow-1);
-      const auto& vse = vbx.smallEnd();
-      const auto& vbe = vbx.bigEnd();
-      blo = {AMREX_D_DECL(plo[0] + vse[0]*dx[0],
-                          plo[1] + vse[1]*dx[1],
-                          plo[2] + vse[2]*dx[2])};
 
-      bhi = {AMREX_D_DECL(plo[0] + (vbe[0]+1)*dx[0],
-                          plo[1] + (vbe[1]+1)*dx[1],
-                          plo[2] + (vbe[2]+1)*dx[2])};
-
-      for (int pindex=0; pindex<aos.size(); ++pindex)
+      for (size_t pindex=0; pindex<aos.size(); ++pindex)
       {
         ParticleType& p = aos[pindex];
         if (p.id() > 0)
@@ -127,20 +104,12 @@ SetParticleLocation(int a_streamLoc, int a_nGrow)
                                  soa.GetRealData(offset + RealData::zloc)[pindex])};
 
           AMREX_D_EXPR(p.pos(0) = newpos[0], p.pos(1) = newpos[1], p.pos(2) = newpos[2]);
-
-          for (int d=0; d<AMREX_SPACEDIM; ++d)
-          {
-            redist |= (newpos[d]<blo[d] || newpos[d]>bhi[d]);
-          }
+	  
         }
       }
     }
   }
-  ParallelDescriptor::ReduceBoolOr(redist);
-  if (redist) {
-    //Print() << "  redistributing" << std::endl;
-    Redistribute();
-  }
+  Redistribute();
 }
 
 static void vnrml(Vector<Real>& vec, int dir)
@@ -149,7 +118,6 @@ static void vnrml(Vector<Real>& vec, int dir)
   Real sum = AMREX_D_TERM(vec[0] * vec[0],
                           + vec[1] * vec[1],
                           + vec[2] * vec[2]);
-  //  Vector<Real> u = vec;
   if (sum < eps) {
     sum = 1. / std::sqrt(sum);
     for (int i=0; i<AMREX_SPACEDIM; ++i) vec[i] *= dir * sum;
@@ -176,10 +144,10 @@ static bool ntrpv(const dim3& x,const FArrayBox& gfab,
   const auto& ghi = gbx.bigEnd();
   for (int d=0; d<AMREX_SPACEDIM; ++d) {
     if (b[d] < glo[d] ||  b[d] > ghi[d]-1) {
-      Print() << "dir: " << d << std::endl;
-      Print() << "d,b,glo,ghi: " << d << " " << b[d] << " " << glo[d] << " " << ghi[d] << std::endl;
-      Print() << "x,plo,phi " << x[d] << " " << plo[d] << " " << phi[d] << std::endl;
-      Print() << "boxlo,boxhi " << plo[d]+glo[d]*dx[d] << " " << plo[d]+(ghi[d]+1)*dx[d] << std::endl;
+      std::cout << "dir: " << d << std::endl;
+      std::cout << "d,b,glo,ghi: " << d << " " << b[d] << " " << glo[d] << " " << ghi[d] << std::endl;
+      std::cout << "x,plo,phi " << x[d] << " " << plo[d] << " " << phi[d] << std::endl;
+      std::cout << "boxlo,boxhi " << plo[d]+glo[d]*dx[d] << " " << plo[d]+(ghi[d]+1)*dx[d] << std::endl;
       return false;
     }
   }
@@ -270,8 +238,7 @@ ComputeNextLocation(int                      a_fromLoc,
 {
   BL_PROFILE("StreamParticleContainer::ComputeNextLocation");
 
-  const int nGrow = a_vectorField[0].nGrow();
-  SetParticleLocation(a_fromLoc,nGrow);
+  SetParticleLocation(a_fromLoc);
 
   const int new_loc_id = a_fromLoc + 1;
   int offset = pcomp * new_loc_id;
@@ -289,7 +256,7 @@ ComputeNextLocation(int                      a_fromLoc,
       auto& soa = pti.GetStructOfArrays();
       const FArrayBox& v = a_vectorField[lev][pti];
 
-      for (int pindex=0; pindex<aos.size(); ++pindex)
+      for (size_t pindex=0; pindex<aos.size(); ++pindex)
       {
         ParticleType& p = aos[pindex];
         const int dir = p.idata(1);
@@ -316,8 +283,7 @@ InterpDataAtLocation(int                      a_fromLoc,
 {
   BL_PROFILE("StreamParticleContainer::InterpDataAtLocation");
 
-  const int nGrow = a_vectorField[0].nGrow();
-  SetParticleLocation(a_fromLoc,nGrow);
+  SetParticleLocation(a_fromLoc);
 
   int offset = pcomp * a_fromLoc; // components on particle
 
@@ -338,12 +304,10 @@ InterpDataAtLocation(int                      a_fromLoc,
       auto& soa = pti.GetStructOfArrays();
       const FArrayBox& v = a_vectorField[lev][pti];
 
-      for (int pindex=0; pindex<aos.size(); ++pindex)
+      for (size_t pindex=0; pindex<aos.size(); ++pindex)
       {
         ParticleType& p = aos[pindex];
 	if (p.id()>0) {
-	  int pId = p.id();
-
 	  // where's the particle?
 	  dim3 x = {AMREX_D_DECL(p.pos(0), p.pos(1), p.pos(2))};
 	  Vector<Real> ntrpvOut(fcomp); // components in infile
@@ -401,11 +365,10 @@ StreamParticleContainer::
 WriteStreamAsTecplot(const std::string& outFile)
 {
   // Set location to first point on stream to guarantee partner line is local
-  SetParticleLocation(0,1);
-
+  SetParticleLocation(0);
+  
   // Create a folder and have each processor write their own data, one file per streamline
   auto myProc = ParallelDescriptor::MyProc();
-  auto nProcs = ParallelDescriptor::NProcs();
 
   if (!amrex::UtilCreateDirectory(outFile, 0755))
     amrex::CreateDirectoryFailed(outFile);
@@ -417,9 +380,8 @@ WriteStreamAsTecplot(const std::string& outFile)
     for (MyParIter pti(*this, lev); pti.isValid() && !will_write; ++pti)
     {
       auto& aos = pti.GetArrayOfStructs();
-      auto& soa = pti.GetStructOfArrays();
 
-      for (int pindex=0; pindex<aos.size() && !will_write; ++pindex)
+      for (size_t pindex=0; pindex<aos.size() && !will_write; ++pindex)
       {
         ParticleType& p = aos[pindex];
         will_write |= (p.id() > 0);
@@ -445,7 +407,7 @@ WriteStreamAsTecplot(const std::string& outFile)
         auto& aos = pti.GetArrayOfStructs();
         auto& soa = pti.GetStructOfArrays();
 
-        for (int pindex=0; pindex<aos.size(); ++pindex)
+        for (size_t pindex=0; pindex<aos.size(); ++pindex)
         {
           ofs << "ZONE I=1 J=" << nPtsOnStrm << " K=1 FORMAT=POINT\n";
           for (int j=0; j<nPtsOnStrm; ++j)
@@ -467,14 +429,15 @@ WriteStreamAsTecplot(const std::string& outFile)
 }
 
 
+#if 0 //AJA inspect function
 void
 StreamParticleContainer::
-InspectParticles (const int nStreamPairs)
+InspectParticles (const int nStreamPairs, const int redist)
 {
   BL_PROFILE("StreamParticleContainer::InspectParticles");
   return;
   
-  SetParticleLocation(0,1);
+  SetParticleLocation(0);
   
   int IOProc = ParallelDescriptor::IOProcessor();
   int myProc = ParallelDescriptor::MyProc();
@@ -504,7 +467,7 @@ InspectParticles (const int nStreamPairs)
 
       auto& aos = pti.GetArrayOfStructs();
 
-      for (int pindex=0; pindex<aos.size(); ++pindex) {
+      for (size_t pindex=0; pindex<aos.size(); ++pindex) {
         ParticleType& p = aos[pindex];
 
         if (p.id() > 0) {
@@ -606,7 +569,7 @@ InspectParticles (const int nStreamPairs)
   
 }
 
-
+#endif
 
 void
 StreamParticleContainer::
@@ -615,7 +578,7 @@ WriteStreamAsBinary(const std::string& outFile,
 		    const int nStreamPairs)
 {
   // Set location to first point on stream to guarantee partner line is local
-  SetParticleLocation(0,1);
+  SetParticleLocation(0);
 
   // Create a folder and have each processor write their own data, one file per streamline
   auto myProc = ParallelDescriptor::MyProc();
@@ -631,9 +594,8 @@ WriteStreamAsBinary(const std::string& outFile,
     for (MyParIter pti(*this, lev); pti.isValid() && !will_write; ++pti)
     {
       auto& aos = pti.GetArrayOfStructs();
-      auto& soa = pti.GetStructOfArrays();
 
-      for (int pindex=0; pindex<aos.size() && !will_write; ++pindex)
+      for (size_t pindex=0; pindex<aos.size() && !will_write; ++pindex)
       {
         ParticleType& p = aos[pindex];
         will_write |= (p.id() > 0);
@@ -650,7 +612,7 @@ WriteStreamAsBinary(const std::string& outFile,
   for (int lev = 0; lev < Nlev; ++lev) {
     for (MyParIter pti(*this, lev); pti.isValid(); ++pti) {
       auto& aos = pti.GetArrayOfStructs();
-      for (int pindex=0; pindex<aos.size(); ++pindex) {
+      for (size_t pindex=0; pindex<aos.size(); ++pindex) {
 	ParticleType& p = aos[pindex];
 	if ( (p.id()>0) && (p.idata(1)==1) ) {
 	  nStreams++;
@@ -700,7 +662,6 @@ WriteStreamAsBinary(const std::string& outFile,
 	  int pindexPair      = pIdMap[pId];
 	  ParticleType& pPair = aos[pindexPair];
 	  int pIdPair         = pPair.id();
-	  int dirPair         = pPair.idata(1);
 	  int pairIdPair      = pPair.idata(2);
 	  
 	  // sanity check
@@ -751,7 +712,7 @@ WriteStreamAsBinary(const std::string& outFile,
   // Write header file with everything consistent across all processors
   ParallelDescriptor::ReduceIntSum(nStreams);
   if (ParallelDescriptor::IOProcessor()) {
-    std::string fileName = outFile + "/Header";
+    fileName = outFile + "/Header";
     std::ofstream ofs(fileName.c_str());
     ofs << "Even odder-ball replacement for sampled streams" << std::endl;
     ofs << nProcs << std::endl;         // translates to number of files to read
