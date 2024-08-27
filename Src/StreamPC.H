@@ -33,27 +33,27 @@ public:
 
   void InitParticles(const amrex::Vector<amrex::Vector<amrex::Real>>& a_locs, const int lev);
 
-  void SetParticleLocation(int a_streamPos);//, int a_nGrow);
+  void SetParticleLocation(int a_streamPos);
 
   void ComputeNextLocation(int                                    a_fromLoc,
-                           amrex::Real                            a_delta_t,
-                           const amrex::Vector<amrex::MultiFab> & a_vectorField);
+                           const amrex::Real                            a_hRK,
+                           const amrex::Vector<amrex::MultiFab> & a_vectorField,
+			   const int                                    a_cSpace);
 
   void InterpDataAtLocation(int                                    a_fromLoc,
 			    const amrex::Vector<amrex::MultiFab> & a_vectorField);
   
   
   void WriteStreamAsBinary(const std::string& outfile,
-			   amrex::Vector<int>& faceData,
-			   const int nStreamPairs);
+			   amrex::Vector<int>& faceData);
 
   
   void WriteStreamAsTecplot(const std::string& outfile);
 
-  bool RK4(dim3 & x,amrex::Real dt,const amrex::FArrayBox& v,const amrex::Real* dx,const amrex::Real* plo,const amrex::Real* phi,int dir);
+  bool RK4(dim3 & x,amrex::Real hrk,const amrex::FArrayBox& v,const amrex::Real* dx,const amrex::Real* plo,const amrex::Real* phi,int dir, int cSpace, amrex::Real dxFine);
 
-#if 0 //AJA inspect function 
-  void InspectParticles(const int nStreamPairs, const int redist);
+#if AMREX_DEBUG //AJA inspect function 
+  void InspectParticles(const int nStreamPairs);
 #endif
   
 protected:

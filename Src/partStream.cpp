@@ -165,7 +165,7 @@ main (int   argc,
     for (int n = 0; n < nVars; n++) {
       outVarNames.push_back(inVarNames[n]);
     }
-    
+
     IntVect pp_is_per;
     pp.getarr("is_per",pp_is_per);
     Array<int,AMREX_SPACEDIM> is_per = {AMREX_D_DECL(pp_is_per[0],pp_is_per[1],pp_is_per[2])};
@@ -188,13 +188,14 @@ main (int   argc,
 	pfdata[lev][n+AMREX_SPACEDIM] = pf.get(lev,inVarNames[n]);
       }
     }
+
+    int nGrow = 3;
+    pp.query("nGrow",nGrow);
       
     Real time=0;
     PhysBCFunctNoOp f;
     PCInterp cbi;
     BCRec bc;
-    int nGrow = 3;
-    pp.query("nGrow",nGrow);
     AMREX_ALWAYS_ASSERT(nGrow>=1);
     Vector<MultiFab> vectorField(Nlev);
     for (int lev=0; lev<Nlev; ++lev) {
@@ -228,27 +229,29 @@ main (int   argc,
       spc.InitParticles(locs,lev);
     }
     //Check if particles initialised fine
-    spc.OK();
+    if (spc.OK()) {
+      Print() << "SPC is happy with initialisation :-)" << std::endl;
+    }
     
-#if 0 //AJA 
+#if AMREX_DEBUG //AJA 
     Print() << "Checking if initialised properly..." << std::endl;
-    // Check initialisation went ok
-    spc.InspectParticles(nStreamPairs,0);
+    spc.InspectParticles(nStreamPairs);
 #endif
-    
+   
     // Interpolate at start
     Print() << "Interpolation at the seed points..." << std::endl;
     spc.InterpDataAtLocation(0,vectorField);
 
     
     Print() << "Computing streams and interpolating..." << std::endl;
+    int cSpace=0; pp.query("cSpace",cSpace);
     Real hRK = 0.1; pp.query("hRK",hRK);
-    AMREX_ALWAYS_ASSERT(hRK>=0 && hRK<=0.5);
-    Real dt = hRK * geoms[finestLevel].CellSize()[0];
+    AMREX_ALWAYS_ASSERT((cSpace == 1) || (hRK>=0 && hRK<=0.5));
+    //Real dt = hRK;// * geoms[finestLevel].CellSize()[0];
     for (int step=0; step<Nsteps-1; ++step)
     {
       // find next location
-      spc.ComputeNextLocation(step,dt,vectorField);
+      spc.ComputeNextLocation(step,hRK,vectorField,cSpace);
 
       // interpolate all data
       spc.InterpDataAtLocation(step+1,vectorField);
@@ -256,8 +259,13 @@ main (int   argc,
     }
 
     // check in again
-#if 0 //AJA checks
-    spc.InspectParticles(nStreamPairs,1);
+    if (spc.OK()) {
+      Print() << "SPC is happy afterwards :-)" << std::endl;
+    }
+    
+#if AMREX_DEBUG //AJA checks
+    Print() << "Checking if we broke things afterwards..." << std::endl;
+    spc.InspectParticles(nStreamPairs);
 #endif
     //check we didn't break them again
     spc.OK();
@@ -275,7 +283,7 @@ main (int   argc,
     //
     if (writeStreamBin) {
       Print() << "Writing streamlines as binary " << streamBinfile << std::endl;
-      spc.WriteStreamAsBinary(streamBinfile,faceData,nStreamPairs);
+      spc.WriteStreamAsBinary(streamBinfile,faceData);
     }
     
   }
